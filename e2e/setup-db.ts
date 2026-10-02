@@ -1,0 +1,64 @@
+// Creates a fresh database for the end-to-end tests: the seed (admin + 75 rooms),
+// one front desk and one maintenance account, and one occupant staying in a room.
+// Run by playwright.config.ts before it starts the test server. Never touches .data/pglite.
+import path from "node:path";
+import { rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { PGlite } from "@electric-sql/pglite";
+import bcrypt from "bcryptjs";
+import { addDaysISO, todayISO } from "../src/lib/format";
+import { ADMIN, E2E_DB, FRONT_DESK, MAINTENANCE, RESIDENT, TENANT } from "./accounts";
+
+async function main() {
+  const dataDir = path.join(process.cwd(), E2E_DB);
+  rmSync(dataDir, { recursive: true, force: true });
+  execFileSync("tsx", ["scripts/seed.ts"], {
+    stdio: "inherit",
+    env: { ...process.env, PGLITE_DIR: dataDir, ADMIN_PASSWORD: ADMIN.password },
+  });
+
+  const db = await PGlite.create(dataDir);
+  for (const [name, account, role] of [
+    ["Fe Desk", FRONT_DESK, "front_desk"],
+    ["Max Fix", MAINTENANCE, "maintenance"],
+  ] as const) {
+    await db.query("insert into staff (name, username, password_hash, role) values ($1, $2, $3, $4)", [
+      name,
+      account.username,
+      await bcrypt.hash(account.password, 10),
+      role,
+    ]);
+  }
+  const {
+    rows: [occupant],
+  } = await db.query<{ id: string }>("insert into occupants (full_name, nickname) values ($1, $2) returning id", [
+    TENANT.name,
+    TENANT.nickname,
+  ]);
+  await db.query(
+    "insert into room_assignments (occupant_id, room_id, check_in, keys_issued) select $1, id, $2, '1 key card' from rooms where number = $3",
+    [occupant.id, addDaysISO(todayISO(), -30), TENANT.room],
+  );
+  const {
+    rows: [resident],
+  } = await db.query<{ id: string }>("insert into occupants (full_name, mobile, id_type, id_number) values ($1, '0917 555 0199', 'PhilSys', '9999-8888-7777') returning id", [
+    RESIDENT.name,
+  ]);
+  await db.query(
+    "insert into room_assignments (occupant_id, room_id, check_in) select $1, id, $2 from rooms where number = $3",
+    [resident.id, addDaysISO(todayISO(), -10), RESIDENT.room],
+  );
+  await db.query("insert into staff (name, username, password_hash, role, occupant_id) values ($1, $2, $3, 'tenant', $4)", [
+    RESIDENT.name,
+    RESIDENT.username,
+    await bcrypt.hash(RESIDENT.password, 10),
+    resident.id,
+  ]);
+  await db.close();
+  console.log("E2E database ready.");
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

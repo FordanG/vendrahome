@@ -1,26 +1,236 @@
 @import "tailwindcss";
 
+/* Tailwind's `dark:` classes follow the same rule as the dark look below. */
+@custom-variant dark {
+  &:where([data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
+/* Palette from vendrato.com: near-black, warm white and one orange (see lib/brand.ts).
+   Black and white carry the app; orange marks what is active, focused or counted. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Browser-drawn parts (checkboxes, date pickers, scrollbars) follow the same light or dark look. */
+  color-scheme: light;
+  --background: #f5f4f0;
+  --surface: #ffffff;
+  --foreground: #0b0b0b;
+  --muted: #5d5d5d;
+  --border: #dddbd4;
+  /* Text boxes and dropdowns: a firmer outline than cards, so they read as places to type. */
+  --field: #ffffff;
+  --field-border: #8f8c85;
+  --accent: #0b0b0b;
+  --accent-foreground: #ffffff;
+  --brand: #ff5a00;
+  --brand-foreground: #0b0b0b;
+  /* Orange dark enough to read as small text on a light page. */
+  --brand-ink: #c24100;
+  --sidebar: #0b0b0b;
+  --sidebar-foreground: #f5f4f0;
+  --sidebar-muted: #a3a3a3;
+  --attention: #b4232c;
+  --attention-foreground: #ffffff;
+  --warn: #f0c330;
+  --warn-foreground: #2b2000;
+  --occupied: #0b0b0b;
+  --occupied-foreground: #ffffff;
+}
+
+/* Dark look. It applies when the person picked Dark (data-theme on <html>, see lib/theme.ts), or when
+   they left it on "Same as device" and the device is in dark mode. Keep the two blocks the same. */
+:root[data-theme="dark"] {
+  /* Charcoal rather than pure black, so pages are not a wall of black; the sidebar keeps the brand black. */
+  color-scheme: dark;
+  --background: #1d1d1d;
+  --surface: #292929;
+  --foreground: #f5f4f0;
+  --muted: #b4b4b4;
+  --border: #444444;
+  --field: #1d1d1d;
+  --field-border: #757575;
+  --accent: #f5f4f0;
+  --accent-foreground: #0b0b0b;
+  --brand-ink: #ff5a00;
+  --attention: #f26a6a;
+  --attention-foreground: #0b0b0b;
+  --warn: #e0b62e;
+  --warn-foreground: #1f1700;
+  --occupied: #e6e4de;
+  --occupied-foreground: #0b0b0b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    /* Charcoal rather than pure black, so pages are not a wall of black; the sidebar keeps the brand black. */
+    color-scheme: dark;
+    --background: #1d1d1d;
+    --surface: #292929;
+    --foreground: #f5f4f0;
+    --muted: #b4b4b4;
+    --border: #444444;
+    --field: #1d1d1d;
+    --field-border: #757575;
+    --accent: #f5f4f0;
+    --accent-foreground: #0b0b0b;
+    --brand-ink: #ff5a00;
+    --attention: #f26a6a;
+    --attention-foreground: #0b0b0b;
+    --warn: #e0b62e;
+    --warn-foreground: #1f1700;
+    --occupied: #e6e4de;
+    --occupied-foreground: #0b0b0b;
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-field: var(--field);
+  --color-field-border: var(--field-border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-ink: var(--brand-ink);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-attention: var(--attention);
+  --color-attention-foreground: var(--attention-foreground);
+  --color-warn: var(--warn);
+  --color-warn-foreground: var(--warn-foreground);
+  --color-occupied: var(--occupied);
+  --color-occupied-foreground: var(--occupied-foreground);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-space-grotesk);
 }
 
-@media (prefers-color-scheme: dark) {
+/* Square corners everywhere, like Vendrato's blocks. Only `rounded-full` stays round. */
+@theme {
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+}
+
+/* Phones: reading text one step larger (15px instead of 14px, small print 13px instead of 12px). */
+@media (max-width: 639px) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --text-xs: 0.8125rem;
+    --text-xs--line-height: calc(1.125 / 0.8125);
+    --text-sm: 0.9375rem;
+    --text-sm--line-height: calc(1.375 / 0.9375);
   }
+}
+
+/* Room lists: jumping to a floor stops below the phone header and the floor buttons. */
+.floor-section {
+  scroll-margin-top: calc(6.75rem + env(safe-area-inset-top));
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-feature-settings: "tnum" 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Room numbers and headings: Space Grotesk set tight, like Vendrato's headings. */
+.plate {
+  font-family: var(--font-space-grotesk), sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+/* Phones: tables turn into a list of cards, one per row (see Table/Td in components/ui.tsx).
+   Each card shows its title, then the other cells two per line with the label above the value. */
+@media (max-width: 639px) {
+  .rtable table,
+  .rtable tbody {
+    display: block;
+  }
+  .rtable thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .rtable tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.625rem 1rem;
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .rtable tr:last-child {
+    border-bottom: 0;
+  }
+  .rtable td {
+    display: block;
+    border: 0;
+    padding: 0;
+    text-align: left;
+  }
+  .rtable td:empty {
+    display: none;
+  }
+  .rtable td[data-primary],
+  .rtable td[data-wide],
+  .rtable td:not([data-label]) {
+    grid-column: 1 / -1;
+  }
+  .rtable td[data-primary] {
+    font-size: 1rem;
+  }
+  .rtable td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.0625rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+details > summary::marker {
+  color: var(--muted);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
 }

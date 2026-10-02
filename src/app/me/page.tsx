@@ -1,0 +1,158 @@
+import Link from "next/link";
+import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
+import { getDb, schema } from "@/db";
+import { requireTenant } from "@/lib/auth";
+import { formatDate, formatTimeRange, todayISO } from "@/lib/format";
+import {
+  appliesToRoom,
+  getCurrentStay,
+  getSchedule,
+  REQUEST_KIND_LABELS,
+  REQUEST_STATUS_TONES,
+  requestStatusLabel,
+} from "@/lib/portal";
+import { Badge, Card, Detail, LinkButton, SectionTitle } from "@/components/ui";
+import { isoWeekday, Timetable } from "./timetable";
+
+export default async function TenantHomePage() {
+  const { occupant } = await requireTenant();
+  const today = todayISO();
+  const db = await getDb();
+  const [stay, schedule, requests] = await Promise.all([
+    getCurrentStay(occupant.id),
+    getSchedule(),
+    db
+      .select()
+      .from(schema.tenantRequests)
+      .where(
+        and(
+          eq(schema.tenantRequests.occupantId, occupant.id),
+          inArray(schema.tenantRequests.status, ["pending", "approved"]),
+        ),
+      )
+      .orderBy(desc(schema.tenantRequests.createdAt))
+      .limit(5),
+  ]);
+  const visits = stay
+    ? await db
+        .select()
+        .from(schema.maintenanceVisits)
+        .where(
+          and(
+            eq(schema.maintenanceVisits.roomId, stay.room.id),
+            eq(schema.maintenanceVisits.status, "scheduled"),
+            gte(schema.maintenanceVisits.date, today),
+          ),
+        )
+        .orderBy(asc(schema.maintenanceVisits.date), asc(schema.maintenanceVisits.timeFrom))
+        .limit(10)
+    : [];
+  const mine = stay ? schedule.map((s) => s.e).filter((e) => appliesToRoom(e, stay.room)) : [];
+  const weekday = isoWeekday(today);
+
+  return (
+    <>
+      <div className="mb-5 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="plate text-[1.75rem] font-bold leading-tight sm:text-3xl">Hi, {occupant.nickname ?? occupant.fullName.split(" ")[0]}</h1>
+          <p className="mt-1 text-sm text-muted">{formatDate(today)}</p>
+        </div>
+        <LinkButton href="/me/requests" className="min-h-12 text-base sm:min-h-0 sm:text-sm">
+          Report a problem or ask for help
+        </LinkButton>
+      </div>
+      <div className="space-y-5">
+        {stay ? (
+          <section className="flex items-stretch gap-4 rounded-xl border border-border bg-surface p-4 sm:gap-6 sm:p-5">
+            <div
+              className="flex w-28 shrink-0 flex-col items-center justify-center rounded-lg bg-occupied px-3 py-4 text-occupied-foreground shadow-[inset_0_0_0_3px_var(--brand)] sm:w-36"
+              aria-label={`Room ${stay.room.number}`}
+            >
+              <span className="text-xs opacity-80">Room</span>
+              <span className="plate text-5xl font-bold leading-none sm:text-6xl">{stay.room.number}</span>
+              <span className="mt-1 text-xs opacity-80">Floor {stay.room.floor}</span>
+            </div>
+            <dl className="grid flex-1 content-center gap-3 sm:grid-cols-2">
+              {stay.a.slot && <Detail label="Your bed">{stay.a.slot}</Detail>}
+              <Detail label="Moved in">{formatDate(stay.a.checkIn)}</Detail>
+              <Detail label="Expected to move out">{stay.a.expectedCheckOut ? formatDate(stay.a.expectedCheckOut) : null}</Detail>
+              <Detail label="Keys and cards you have" empty="None recorded">{stay.a.keysIssued}</Detail>
+            </dl>
+          </section>
+        ) : (
+          <Card>
+            <p className="text-sm text-muted">You don&apos;t have a room assigned right now. Please talk to the front desk.</p>
+          </Card>
+        )}
+
+        {stay && (
+          <Card>
+            <SectionTitle>When staff will come to your room</SectionTitle>
+            {visits.length === 0 ? (
+              <p className="text-sm text-muted">Nothing scheduled.</p>
+            ) : (
+              <ul className="divide-y divide-border text-sm">
+                {visits.map((v) => (
+                  <li key={v.id} className="flex flex-wrap items-baseline gap-x-3 py-2">
+                    <span className="w-28 shrink-0 font-medium">
+                      {v.date === today ? "Today" : formatDate(v.date)}
+                    </span>
+                    <span>{v.requestId ? "Visit you asked for" : v.title}</span>
+                    {formatTimeRange(v.timeFrom, v.timeTo) && (
+                      <span className="text-muted">{formatTimeRange(v.timeFrom, v.timeTo)}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        )}
+
+        {stay && (
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Card>
+              <SectionTitle>Your kitchen times</SectionTitle>
+              <Timetable entries={mine.filter((e) => e.kind === "kitchen")} today={weekday} />
+            </Card>
+            <Card>
+              <SectionTitle>Laundry pickup days</SectionTitle>
+              <Timetable entries={mine.filter((e) => e.kind === "laundry")} today={weekday} />
+              <p className="mt-3 text-xs text-muted">
+                Can&apos;t make these times?{" "}
+                <Link className="underline" href="/me/requests?kind=laundry">
+                  Ask for another day
+                </Link>
+                .
+              </p>
+            </Card>
+          </div>
+        )}
+
+        <Card>
+          <SectionTitle
+            actions={
+              <Link className="text-sm text-muted underline" href="/me/requests">
+                All requests
+              </Link>
+            }
+          >
+            Your open requests
+          </SectionTitle>
+          {requests.length === 0 ? (
+            <p className="text-sm text-muted">You have no open requests.</p>
+          ) : (
+            <ul className="divide-y divide-border text-sm">
+              {requests.map((r) => (
+                <li key={r.id} className="flex flex-wrap items-center gap-2 py-2">
+                  <span className="font-medium">{REQUEST_KIND_LABELS[r.kind]}</span>
+                  <Badge tone={REQUEST_STATUS_TONES[r.status]}>{requestStatusLabel(r)}</Badge>
+                  <span className="w-full truncate text-muted sm:w-auto sm:flex-1">{r.details}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+    </>
+  );
+}
