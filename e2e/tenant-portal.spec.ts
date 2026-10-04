@@ -181,7 +181,7 @@ test("tenant portal", async ({ browser }) => {
   await test.step("tenant sees the approval", async () => {
     await tenant.goto("/me/requests");
     await expect(tenant.getByText("Approved", { exact: true })).toBeVisible();
-    await expect(tenant.getByText("Front desk: Plumber will come.")).toBeVisible();
+    await expect(tenant.getByText("Staff reply: Plumber will come.")).toBeVisible();
     await expect(tenant.getByText(/6:00 PM – 7:00 PM/)).toBeVisible();
     await tenant.goto("/me");
     await expect(tenant.getByText("Visit you asked for")).toBeVisible();
