@@ -4,7 +4,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
 import { daysBetween, formatDate, formatPeso, todayISO } from "@/lib/format";
-import { contractMonthOf, contractMonths, contractTotal, rentForMonth, rentSchedule } from "@/lib/rent";
+import { contractMonthOf, contractMonths, contractTotal, rentForMonth, rentSchedule, type RentPeriod } from "@/lib/rent";
 import { ActionForm } from "@/components/action-form";
 import { RoomPicker } from "@/components/room-picker";
 import {
@@ -60,14 +60,18 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
   ]);
 
   const canManage = CAN.manageContracts.includes(user.role);
+  const canEditTerms = canManage && contract.status === "draft";
   const today = todayISO();
   const perRoom = contract.rentType === "per_room";
   const base = perRoom ? contractRooms.reduce((sum, r) => sum + (r.cr.monthlyRate ?? 0), 0) : contract.monthlyRent;
   const missingRates = perRoom ? contractRooms.filter((r) => r.cr.monthlyRate == null).length : 0;
-  const schedule = rentSchedule(base, steps, contract.startDate, contract.endDate);
+  let schedule: RentPeriod[] = [];
+  let rentError = false;
+  try { schedule = rentSchedule(base, steps, contract.startDate, contract.endDate, contract.partialMonthPolicy); }
+  catch { rentError = true; }
   const months = contractMonths(contract.startDate, contract.endDate);
   const monthNow = contractMonthOf(contract.startDate, contract.endDate, today);
-  const rentNow = monthNow ? rentForMonth(base, steps, monthNow) : null;
+  const rentNow = !rentError && contract.status === "active" && monthNow ? rentForMonth(base, steps, monthNow) : null;
   const nextChange = schedule.find((p) => p.fromMonth > (monthNow ?? 0) && p.fromMonth > 1);
   const daysToChange = nextChange ? daysBetween(today, nextChange.fromDate) : null;
   const peopleByRoom = new Map<string, number>();
@@ -92,6 +96,8 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
         }
       />
 
+      {rentError && <Card className="mb-6 border-warn text-sm">This saved rent schedule contains invalid amounts. Do not use its totals; ask the administrator to review the original contract records.</Card>}
+      {contract.status !== "draft" && <Card className="mb-6 text-sm">Activated terms, rooms and rent steps are locked to preserve history. Create a new contract for a renewal or changed terms.</Card>}
       {daysToChange !== null && daysToChange >= 0 && daysToChange <= 60 && (
         <Card className="mb-6 border-warn text-sm">
           Rent changes to <strong>{formatPeso(nextChange!.monthly)}</strong> a month from{" "}
@@ -119,7 +125,8 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
               <Detail label="Billing day">Day {contract.billingDay} of each month</Detail>
               <Detail label="How rent is set">{perRoom ? "A rate for each room" : "One amount for all rooms"}</Detail>
               <Detail label="Payment terms">{contract.paymentTerms}</Detail>
-              <Detail label="Total rent for the whole contract">{formatPeso(contractTotal(schedule))}</Detail>
+              <Detail label="Partial final month">{contract.partialMonthPolicy === "full" ? "Full month charged" : "Prorated by contract-month days"}</Detail>
+              <Detail label="Total rent for the whole contract">{rentError ? "Needs review" : formatPeso(contractTotal(schedule))}</Detail>
             </dl>
           </Card>
 
@@ -152,7 +159,7 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
                         {p.note && <span className="block text-xs text-muted">{p.note}</span>}
                       </Td>
                       <Td label="Monthly rent" className="text-right">{formatPeso(p.monthly)}</Td>
-                      <Td label="Subtotal" className="text-right">{formatPeso(p.monthly * (p.toMonth - p.fromMonth + 1))}</Td>
+                      <Td label="Subtotal" className="text-right">{formatPeso(p.total)}</Td>
                     </tr>
                   );
                 })}
@@ -175,7 +182,7 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
                       </strong>
                       {s.note && <span className="text-muted"> ({s.note})</span>}
                     </span>
-                    {canManage && (
+                    {canEditTerms && (
                       <form
                         action={async () => {
                           "use server";
@@ -191,7 +198,7 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
                 ))}
               </ul>
             )}
-            {canManage && (
+            {canEditTerms && (
               <ActionForm action={addRentStep.bind(null, contract.id)} submitLabel="Add rent change" resetOnSuccess>
                 <FormGrid>
                   <Field label="Starts in month" hint={`A month from 2 to ${months}. Month 13 is the start of year 2.`}>
@@ -222,7 +229,7 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
               <ContractRoomsForm
                 action={updateContractRooms.bind(null, contract.id)}
                 perRoom={perRoom}
-                canManage={canManage}
+                canManage={canEditTerms}
                 rows={contractRooms.map(({ cr, room }) => ({
                   id: cr.id,
                   number: room.number,
@@ -235,7 +242,7 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
             )}
           </div>
 
-          {canManage && (
+          {canEditTerms && (
             <details className="rounded-lg border border-border bg-surface">
               <summary className="cursor-pointer select-none px-5 py-4 text-base font-semibold">Change contract terms</summary>
               <div className="border-t border-border p-5">
@@ -246,7 +253,7 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
             </details>
           )}
 
-          {canManage && allRooms.length > inContract.size && (
+          {canEditTerms && allRooms.length > inContract.size && (
             <Card>
               <SectionTitle>Add rooms</SectionTitle>
               <ActionForm action={addContractRooms.bind(null, contract.id)} submitLabel="Add ticked rooms">
@@ -276,7 +283,7 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
                   hint="Only active contracts show on the room board. Activating checks that no room is in another active contract."
                 >
                   <Select name="status" defaultValue={contract.status}>
-                    {Object.entries(CONTRACT_STATUS_LABELS).map(([k, v]) => (
+                    {Object.entries(CONTRACT_STATUS_LABELS).filter(([k]) => k === contract.status || (contract.status === "draft" ? k === "active" : contract.status === "active" ? k === "ended" || k === "terminated" : false)).map(([k, v]) => (
                       <option key={k} value={k}>
                         {v}
                       </option>
@@ -286,7 +293,7 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
               </ActionForm>
             </Card>
           )}
-          {!canManage && contract.notes && (
+          {contract.notes && (
             <Card>
               <SectionTitle>Notes</SectionTitle>
               <p className="whitespace-pre-wrap text-sm">{contract.notes}</p>

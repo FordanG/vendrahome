@@ -12,7 +12,8 @@
     "db:demo": "tsx scripts/demo-data.ts",
     "db:demo:remove": "tsx scripts/demo-data.ts --remove",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:rules": "node --conditions=react-server --import tsx --test tests/*.cjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
@@ -23,7 +24,8 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "^0.0.1",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "sharp": "0.35.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

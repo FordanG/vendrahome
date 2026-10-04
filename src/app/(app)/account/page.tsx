@@ -1,6 +1,7 @@
 import { requireStaff, ROLE_LABELS } from "@/lib/auth";
 import { ActionForm } from "@/components/action-form";
-import { Card, Field, Input, PageHeader } from "@/components/ui";
+import { Card, Field, Input, PageHeader, SectionTitle } from "@/components/ui";
+import { AccountProfile } from "@/components/account-profile";
 import { ThemePicker } from "@/components/theme-picker";
 import { changeOwnPassword } from "../staff/actions";
 
@@ -9,7 +10,9 @@ export default async function AccountPage() {
   return (
     <>
       <PageHeader title="My account" subtitle={`${user.name}, ${ROLE_LABELS[user.role]}. You sign in as ${user.username}.`} />
+      <AccountProfile user={user} />
       <Card className="max-w-md">
+        <SectionTitle>Password</SectionTitle>
         <ActionForm action={changeOwnPassword} submitLabel="Change password" resetOnSuccess>
           <Field label="Current password">
             <Input name="current" type="password" autoComplete="current-password" required />

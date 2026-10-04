@@ -15,7 +15,7 @@ import { Badge, Card, Detail, LinkButton, SectionTitle } from "@/components/ui";
 import { isoWeekday, Timetable } from "./timetable";
 
 export default async function TenantHomePage() {
-  const { occupant } = await requireTenant();
+  const { user, occupant } = await requireTenant();
   const today = todayISO();
   const db = await getDb();
   const [stay, schedule, requests] = await Promise.all([
@@ -54,7 +54,7 @@ export default async function TenantHomePage() {
     <>
       <div className="mb-5 flex flex-col gap-4 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="plate text-[1.75rem] font-bold leading-tight sm:text-3xl">Hi, {occupant.nickname ?? occupant.fullName.split(" ")[0]}</h1>
+          <h1 className="plate break-words text-[1.75rem] font-bold leading-tight sm:text-3xl">Hi, {user.name.split(/\s+/)[0]}</h1>
           <p className="mt-1 text-sm text-muted">{formatDate(today)}</p>
         </div>
         <LinkButton href="/me/requests" className="min-h-12 text-base sm:min-h-0 sm:text-sm">
@@ -97,7 +97,7 @@ export default async function TenantHomePage() {
                     <span className="w-28 shrink-0 font-medium">
                       {v.date === today ? "Today" : formatDate(v.date)}
                     </span>
-                    <span>{v.requestId ? "Visit you asked for" : v.title}</span>
+                    <span>{v.requestId ? (requests.some(r => r.id === v.requestId) ? "Visit you asked for" : "Room maintenance") : v.title}</span>
                     {formatTimeRange(v.timeFrom, v.timeTo) && (
                       <span className="text-muted">{formatTimeRange(v.timeFrom, v.timeTo)}</span>
                     )}

@@ -52,6 +52,12 @@ export function ContractFields({
       <Field label="Billing day" hint="Day of the month rent is billed (1–28)">
         <Input name="billingDay" type="number" min={1} max={28} defaultValue={contract?.billingDay ?? 1} required />
       </Field>
+      <Field label="Partial final month" hint="Months run from the start-date anniversary; the end date is inclusive.">
+        <Select name="partialMonthPolicy" defaultValue={contract?.partialMonthPolicy ?? "full"}>
+          <option value="full">Charge a full month</option>
+          <option value="prorated">Prorate by days in that contract month</option>
+        </Select>
+      </Field>
       <Field label="Payment terms" hint="e.g. Due within 5 days of billing">
         <Input name="paymentTerms" defaultValue={contract?.paymentTerms ?? ""} />
       </Field>

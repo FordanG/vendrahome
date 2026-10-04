@@ -53,7 +53,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
     .sort((a, b) => a.checkIn.localeCompare(b.checkIn));
 
   const rooms = board.filter((r) => {
-    const free = r.capacity - r.occupants.length - r.upcoming.length;
+    const free = r.assignableBeds;
     if (show === "free" && (free <= 0 || r.status === "not_available")) return false;
     if (show === "occupied" && r.occupants.length === 0) return false;
     if (!q) return true;
@@ -159,7 +159,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
         </div>
         <AutoSubmitSelect name="show" defaultValue={show} className="sm:w-48" aria-label="Show">
           <option value="all">All rooms</option>
-          <option value="free">Rooms with free beds</option>
+          <option value="free">Rooms with assignable beds</option>
           <option value="occupied">Rooms with tenants</option>
         </AutoSubmitSelect>
       </form>
@@ -177,7 +177,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
                   {rooms
                     .filter((r) => r.floor === f)
                     .map((r) => {
-                      const free = r.capacity - r.occupants.length - r.upcoming.length;
+                      const free = r.assignableBeds;
                       const names = r.occupants.map((o) => o.fullName);
                       return (
                         <Row
@@ -221,7 +221,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
               </thead>
               <tbody>
                 {rooms.map((r) => {
-                  const free = r.capacity - r.occupants.length - r.upcoming.length;
+                  const free = r.assignableBeds;
                   return (
                     <tr key={r.id}>
                       <Td primary>

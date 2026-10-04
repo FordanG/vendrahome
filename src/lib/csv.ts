@@ -1,3 +1,5 @@
+import { isISODate } from "./format";
+
 /** Parses CSV text (RFC 4180 quotes, comma or semicolon separated) into rows of cells. */
 export function parseCsv(text: string): string[][] {
   const src = text.replace(/^﻿/, "");
@@ -61,10 +63,11 @@ export function normalizeDate(input: string): string | null {
   if (m) return iso(+m[1], +m[2], +m[3]);
   m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) return iso(+m[3], +m[1], +m[2]); // month/day/year, as Excel exports in the Philippines
-  const parsed = Date.parse(v + " UTC");
-  if (!Number.isNaN(parsed)) {
-    const d = new Date(parsed);
-    return iso(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+  m = v.match(/^(\d{1,2})[- ]([A-Za-z]+)[- ,]+(\d{4})$/);
+  if (m) {
+    const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+    const month = months.findIndex(name => name === m![2].toLowerCase() || name.slice(0, 3) === m![2].toLowerCase());
+    return month < 0 ? null : iso(+m[3], month + 1, +m[1]);
   }
   return null;
 }
@@ -72,5 +75,6 @@ export function normalizeDate(input: string): string | null {
 function iso(y: number, m: number, d: number): string | null {
   const date = new Date(Date.UTC(y, m - 1, d));
   if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) return null;
-  return date.toISOString().slice(0, 10);
+  const value = date.toISOString().slice(0, 10);
+  return isISODate(value) ? value : null;
 }

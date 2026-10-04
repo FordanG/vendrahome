@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { requestScope } from "@/lib/service-work";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
 import { getRoomBoard } from "@/lib/rooms";
@@ -34,7 +35,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
       .select({ r: schema.tenantRequests, name: schema.occupants.fullName })
       .from(schema.tenantRequests)
       .innerJoin(schema.occupants, eq(schema.tenantRequests.occupantId, schema.occupants.id))
-      .where(and(eq(schema.tenantRequests.roomId, id), inArray(schema.tenantRequests.status, ["pending", "approved"])))
+      .where(and(eq(schema.tenantRequests.roomId, id), inArray(schema.tenantRequests.status, ["pending", "approved"]), requestScope(user)))
       .orderBy(desc(schema.tenantRequests.urgent), desc(schema.tenantRequests.createdAt)),
   ]);
   const live = board.find((r) => r.id === id)!;
@@ -54,7 +55,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
         }
         actions={
           canSeePeople &&
-          live.occupants.length < room.capacity && (
+          live.assignableBeds > 0 && (
             <Link
               href={`/assignments/new?room=${room.id}`}
               className="rounded-md bg-accent px-3.5 py-2 text-sm font-medium text-accent-foreground"
@@ -70,6 +71,8 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
           <Card>
             <SectionTitle>Right now</SectionTitle>
             <dl className="grid gap-4 sm:grid-cols-2">
+              <Detail label="Beds available to assign">{live.assignableBeds}</Detail>
+              <Detail label="Condition">{CONDITION_LABELS[room.condition]}</Detail>
               <Detail label="Contract">
                 {live.contract ? (
                   canSeePeople ? (

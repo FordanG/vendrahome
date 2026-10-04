@@ -1,4 +1,5 @@
-import { desc, eq } from "drizzle-orm";
+import Link from "next/link";
+import { count, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireTenant } from "@/lib/auth";
 import { formatDate, formatTimeRange, todayISO } from "@/lib/format";
@@ -20,17 +21,23 @@ const at = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "s
 
 export default async function TenantRequestsPage({ searchParams }: PageProps<"/me/requests">) {
   const { occupant } = await requireTenant();
-  const kind = (await searchParams).kind;
+  const params = await searchParams;
+  const kind = params.kind;
   const db = await getDb();
+  const scope = eq(schema.tenantRequests.occupantId, occupant.id);
+  const [{ total }] = await db.select({ total: count() }).from(schema.tenantRequests).where(scope);
+  const pageSize = 50;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.max(1, Math.min(totalPages, Math.floor(Number(params.page) || 1)));
   const [stay, schedule, requests] = await Promise.all([
     getCurrentStay(occupant.id),
     getSchedule(),
     db
       .select()
       .from(schema.tenantRequests)
-      .where(eq(schema.tenantRequests.occupantId, occupant.id))
-      .orderBy(desc(schema.tenantRequests.createdAt))
-      .limit(50),
+      .where(scope)
+      .orderBy(desc(schema.tenantRequests.createdAt), desc(schema.tenantRequests.id))
+      .limit(pageSize).offset((page - 1) * pageSize),
   ]);
   const laundry = stay ? schedule.map((s) => s.e).filter((e) => e.kind === "laundry" && appliesToRoom(e, stay.room)) : [];
 
@@ -98,10 +105,10 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
                   )}
                   {r.scheduledDate && r.status !== "declined" && (
                     <p className="mt-2 text-sm font-medium">
-                      Booked for {[formatDate(r.scheduledDate), formatTimeRange(r.scheduledFrom, r.scheduledTo)].filter(Boolean).join(", ")}
+                      {r.status === "done" ? "Appointment date" : "Booked for"} {[formatDate(r.scheduledDate), formatTimeRange(r.scheduledFrom, r.scheduledTo)].filter(Boolean).join(", ")}
                     </p>
                   )}
-                  {r.response && <p className="mt-1 text-sm">Front desk: {r.response}</p>}
+                  {r.response && <p className="mt-1 text-sm">{r.cancelledAt ? r.response : `Staff reply: ${r.response}`}</p>}
                   {r.status === "pending" && (
                     <div className="mt-3">
                       <ActionForm
@@ -117,6 +124,11 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
               ))}
             </div>
           )}
+          {totalPages > 1 && <nav className="mt-4 flex items-center gap-5 text-sm" aria-label="Your request pages">
+            {page > 1 && <Link className="underline" href={`/me/requests?page=${page - 1}`}>Newer requests</Link>}
+            <span>Page {page} of {totalPages}</span>
+            {page < totalPages && <Link className="underline" href={`/me/requests?page=${page + 1}`}>Older requests</Link>}
+          </nav>}
         </section>
       </div>
     </>

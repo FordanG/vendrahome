@@ -22,6 +22,41 @@
       "when": 1790478548266,
       "tag": "0002_tenant_portal",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790957840086,
+      "tag": "0003_peaceful_nomad",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790958200560,
+      "tag": "0004_greedy_rick_jones",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790958640438,
+      "tag": "0005_curly_robbie_robertson",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790992934096,
+      "tag": "0006_magical_toad",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790993680930,
+      "tag": "0007_wide_titania",
+      "breakpoints": true
     }
   ]
 }

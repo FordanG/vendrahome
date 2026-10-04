@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   pgEnum,
@@ -25,6 +26,8 @@ export const staffRole = pgEnum("staff_role", ["admin", "front_desk", "maintenan
 export const staff = pgTable("staff", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   role: staffRole("role").notNull(),
@@ -36,6 +39,12 @@ export const staff = pgTable("staff", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const accountPhotos = pgTable("account_photos", {
+  staffId: uuid("staff_id").primaryKey().references(() => staff.id, { onDelete: "cascade" }),
+  data: text("data").notNull(),
+  version: uuid("version").notNull().defaultRandom(),
+});
+
 export const sessions = pgTable("sessions", {
   // sha256 of the cookie token, never the token itself
   id: text("id").primaryKey(),
@@ -43,6 +52,12 @@ export const sessions = pgTable("sessions", {
     .notNull()
     .references(() => staff.id, { onDelete: "cascade" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
+export const loginAttempts = pgTable("login_attempts", {
+  key: text("key").primaryKey(),
+  attempts: integer("attempts").notNull().default(0),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const roomTypes = pgTable("room_types", {
@@ -83,6 +98,8 @@ export const clients = pgTable("clients", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const partialMonthPolicy = pgEnum("partial_month_policy", ["full", "prorated"]);
+
 export const rentType = pgEnum("rent_type", ["total", "per_room"]);
 export const contractStatus = pgEnum("contract_status", [
   "draft",
@@ -105,6 +122,7 @@ export const contracts = pgTable("contracts", {
   deposit: centavos("deposit").notNull().default(0),
   advance: centavos("advance").notNull().default(0),
   billingDay: integer("billing_day").notNull().default(1),
+  partialMonthPolicy: partialMonthPolicy("partial_month_policy").notNull().default("full"),
   paymentTerms: text("payment_terms"),
   notes: text("notes"),
   status: contractStatus("status").notNull().default("draft"),
@@ -139,7 +157,7 @@ export const rentSteps = pgTable("rent_steps", {
   kind: rentStepKind("kind").notNull(),
   value: centavos("value").notNull(),
   note: text("note"),
-});
+}, (t) => [uniqueIndex("rent_steps_contract_month_unique").on(t.contractId, t.startMonth)]);
 
 export const occupantStatus = pgEnum("occupant_status", ["active", "inactive"]);
 
@@ -204,6 +222,8 @@ export const roomAssignments = pgTable(
   (t) => [
     index("assignments_room_idx").on(t.roomId),
     index("assignments_occupant_idx").on(t.occupantId),
+    uniqueIndex("assignments_one_open_stay").on(t.occupantId).where(sql`${t.actualCheckOut} IS NULL`),
+    uniqueIndex("assignments_open_slot").on(t.roomId, sql`lower(trim(${t.slot}))`).where(sql`${t.actualCheckOut} IS NULL AND ${t.slot} IS NOT NULL`),
   ],
 );
 
@@ -259,6 +279,7 @@ export const maintenanceVisits = pgTable(
     status: visitStatus("status").notNull().default("scheduled"),
     // Set when the visit came from an approved tenant request.
     requestId: uuid("request_id").references((): AnyPgColumn => tenantRequests.id, { onDelete: "set null" }),
+    assigneeId: uuid("assignee_id").references(() => staff.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => staff.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -289,7 +310,10 @@ export const tenantRequests = pgTable(
     scheduledFrom: text("scheduled_from"),
     scheduledTo: text("scheduled_to"),
     response: text("response"),
-    handledBy: uuid("handled_by").references(() => staff.id, { onDelete: "set null" }),
+    assigneeId: uuid("assignee_id").references(() => staff.id, { onDelete: "set null" }),
+  dueDate: date("due_date"),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  handledBy: uuid("handled_by").references(() => staff.id, { onDelete: "set null" }),
     handledAt: timestamp("handled_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

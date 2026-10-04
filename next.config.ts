@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: { serverActions: { bodySizeLimit: "3mb" } },
   serverExternalPackages: ["@electric-sql/pglite"],
   // The dev-only "N" badge would sit on the phone tab bar or header; errors still show without it.
   devIndicators: false,

@@ -32,7 +32,7 @@ export default async function HouseRulesPage() {
 
   return (
     <>
-      <PageHeader title="House rules" subtitle={canManage ? "Tenants see these rules in the app. Open a rule to change or delete it." : "Tenants see these rules in the app."} />
+      <PageHeader title="House rules" subtitle={canManage ? "Property rules for residents, staff and authorized service providers. Residents can read them in the app. Open a rule to edit it." : "Property rules for residents, staff and authorized service providers."} />
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-3">
           {rules.length === 0 && <Empty>No house rules yet. Add the first one with the form.</Empty>}

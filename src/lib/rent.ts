@@ -8,6 +8,7 @@ export type RentPeriod = {
   fromDate: string;
   toDate: string;
   monthly: number;
+  total: number;
   note: string | null;
 };
 
@@ -32,11 +33,15 @@ export function contractMonthOf(startDate: string, endDate: string, date: string
  * by value basis points (500 = 5%), compounding on earlier steps.
  */
 export function rentForMonth(base: number, steps: Step[], month: number): number {
+  if (!Number.isSafeInteger(base) || base < 0) throw new RangeError("Invalid rent amount.");
   let rent = base;
   for (const s of [...steps].sort((a, b) => a.startMonth - b.startMonth)) {
     if (s.startMonth > month) break;
-    rent = s.kind === "amount" ? s.value : Math.round((rent * (10_000 + s.value)) / 10_000);
+    if (!Number.isSafeInteger(s.value) || (s.kind === "percent" ? s.value < -10000 : s.value < 0)) throw new RangeError("Invalid rent change.");
+    rent = s.kind === "amount" ? s.value : Number((BigInt(rent) * (BigInt(10_000) + BigInt(s.value)) + BigInt(5_000)) / BigInt(10_000));
+    if (!Number.isSafeInteger(rent)) throw new RangeError("Rent exceeds the supported amount.");
   }
+  if (!Number.isSafeInteger(rent) || rent < 0) throw new RangeError("Rent exceeds the supported amount.");
   return rent;
 }
 
@@ -46,15 +51,23 @@ export function rentSchedule(
   steps: Step[],
   startDate: string,
   endDate: string,
+  partialMonthPolicy: "full" | "prorated" = "full",
 ): RentPeriod[] {
   const total = contractMonths(startDate, endDate);
   const periods: RentPeriod[] = [];
   const stepAt = new Map(steps.map((s) => [s.startMonth, s]));
   for (let m = 1; m <= total; m++) {
     const monthly = rentForMonth(base, steps, m);
+    const monthStart = addMonthsISO(startDate, m - 1);
+    const nextStart = addMonthsISO(startDate, m);
+    const actualEnd = endDate < dayBefore(nextStart) ? endDate : dayBefore(nextStart);
+    const totalAmount = partialMonthPolicy === "prorated"
+      ? Math.round(monthly * ((daysBetween(monthStart, actualEnd) + 1) / daysBetween(monthStart, nextStart)))
+      : monthly;
     const last = periods.at(-1);
     if (last && last.monthly === monthly && !stepAt.has(m)) {
       last.toMonth = m;
+      last.total += totalAmount;
       continue;
     }
     periods.push({
@@ -63,6 +76,7 @@ export function rentSchedule(
       fromDate: addMonthsISO(startDate, m - 1),
       toDate: "",
       monthly,
+      total: totalAmount,
       note: stepAt.get(m)?.note ?? null,
     });
   }
@@ -70,6 +84,7 @@ export function rentSchedule(
     const periodEnd = dayBefore(addMonthsISO(startDate, p.toMonth));
     p.toDate = periodEnd > endDate ? endDate : periodEnd;
   }
+  if (!Number.isSafeInteger(contractTotal(periods))) throw new RangeError("Contract total exceeds the supported amount.");
   return periods;
 }
 
@@ -79,7 +94,7 @@ function dayBefore(iso: string): string {
 }
 
 export function contractTotal(periods: RentPeriod[]): number {
-  return periods.reduce((sum, p) => sum + p.monthly * (p.toMonth - p.fromMonth + 1), 0);
+  return periods.reduce((sum, p) => sum + p.total, 0);
 }
 
 export function daysLeft(today: string, endDate: string) {

@@ -1,7 +1,8 @@
 "use server";
 
+import { mutate } from "@/lib/mutations";
+
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
@@ -22,23 +23,27 @@ function readClient(fd: FormData) {
 }
 
 export async function createClient(_: ActionState, fd: FormData): Promise<ActionState> {
-  const user = await requireStaff(CAN.manageContracts);
-  const values = readClient(fd);
-  if (!values.name) return { error: "Company name is required." };
-  const db = await getDb();
-  const [client] = await db.insert(schema.clients).values({ ...values, name: values.name }).returning();
-  await audit(user.id, "create", "client", client.id, { name: client.name });
-  revalidatePath("/clients");
-  redirect(`/clients/${client.id}`);
+  return mutate(async () => {
+    const user = await requireStaff(CAN.manageContracts);
+    const values = readClient(fd);
+    if (!values.name) return { error: "Company name is required." };
+    const db = await getDb();
+    const [client] = await db.insert(schema.clients).values({ ...values, name: values.name }).returning();
+    await audit(user.id, "create", "client", client.id, { name: client.name });
+    revalidatePath("/clients");
+    return { redirectTo: `/clients/${client.id}` };
+  });
 }
 
 export async function updateClient(id: string, _: ActionState, fd: FormData): Promise<ActionState> {
-  const user = await requireStaff(CAN.manageContracts);
-  const values = readClient(fd);
-  if (!values.name) return { error: "Company name is required." };
-  const db = await getDb();
-  await db.update(schema.clients).set({ ...values, name: values.name }).where(eq(schema.clients.id, id));
-  await audit(user.id, "update", "client", id, values);
-  revalidatePath(`/clients/${id}`);
-  return { ok: "Saved." };
+  return mutate(async () => {
+    const user = await requireStaff(CAN.manageContracts);
+    const values = readClient(fd);
+    if (!values.name) return { error: "Company name is required." };
+    const db = await getDb();
+    await db.update(schema.clients).set({ ...values, name: values.name }).where(eq(schema.clients.id, id));
+    await audit(user.id, "update", "client", id, values);
+    revalidatePath(`/clients/${id}`);
+    return { ok: "Saved." };
+  });
 }

@@ -4,8 +4,8 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import bcrypt from "bcryptjs";
-import { and, eq, gt } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { and, eq, gt, lt } from "drizzle-orm";
+import { getDb, schema, withTransaction } from "@/db";
 import type { Staff, StaffRole } from "@/db/schema";
 
 export const SESSION_COOKIE = "hotel_session";
@@ -14,16 +14,28 @@ const SESSION_DAYS = 14;
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
 export async function signIn(username: string, password: string): Promise<boolean> {
-  const db = await getDb();
-  const user = await db.query.staff.findFirst({
-    where: eq(schema.staff.username, username.trim().toLowerCase()),
-  });
-  if (!user || !user.active) return false;
-  if (!(await bcrypt.compare(password, user.passwordHash))) return false;
-
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 86_400_000);
-  await db.insert(schema.sessions).values({ id: hashToken(token), staffId: user.id, expiresAt });
+  const signedIn = await withTransaction(async () => {
+    const db = await getDb();
+    const normalized = username.trim().toLowerCase();
+    if (!normalized || normalized.length > 200 || password.length > 200) return false;
+    const key = hashToken(normalized);
+    const cutoff = new Date(Date.now() - 15 * 60_000);
+    await db.delete(schema.loginAttempts).where(lt(schema.loginAttempts.windowStart, cutoff));
+    const attempt = await db.query.loginAttempts.findFirst({ where: eq(schema.loginAttempts.key, key) });
+    if (attempt && attempt.attempts >= 8) return false;
+    const user = await db.query.staff.findFirst({ where: eq(schema.staff.username, normalized) });
+    if (!user?.active || !(await bcrypt.compare(password, user.passwordHash))) {
+      await db.insert(schema.loginAttempts).values({ key, attempts: 1 })
+        .onConflictDoUpdate({ target: schema.loginAttempts.key, set: { attempts: (attempt?.attempts ?? 0) + 1 } });
+      return false;
+    }
+    await db.delete(schema.loginAttempts).where(eq(schema.loginAttempts.key, key));
+    await db.insert(schema.sessions).values({ id: hashToken(token), staffId: user.id, expiresAt });
+    return true;
+  });
+  if (!signedIn) return false;
 
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
@@ -33,6 +45,11 @@ export async function signIn(username: string, password: string): Promise<boolea
     expires: expiresAt,
   });
   return true;
+}
+
+export async function currentSessionId(): Promise<string | null> {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  return token ? hashToken(token) : null;
 }
 
 export async function signOut() {

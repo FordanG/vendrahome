@@ -10,6 +10,7 @@ import { ActionForm } from "@/components/action-form";
 import { Badge, Card, Detail, Field, FormGrid, Input, PageHeader, SectionTitle, Select, Table, Td, Th } from "@/components/ui";
 import {
   assignRoom,
+  cancelReservation,
   checkOut,
   createTenantLogin,
   editAssignment,
@@ -63,7 +64,7 @@ export default async function OccupantPage({ params }: PageProps<"/occupants/[id
           <span className="inline-flex flex-wrap items-center gap-2">
             {current ? (
               <Badge tone="green">
-                Room {current.roomNumber}
+                {current.a.checkIn > today ? "Reserved room" : "Room"} {current.roomNumber}
                 {current.a.slot && `, ${current.a.slot}`}
               </Badge>
             ) : occupant.status === "active" ? (
@@ -85,7 +86,7 @@ export default async function OccupantPage({ params }: PageProps<"/occupants/[id
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
           <Card>
-            <SectionTitle>Current room</SectionTitle>
+            <SectionTitle>{current && current.a.checkIn > today ? "Reserved room" : "Current room"}</SectionTitle>
             {current ? (
               <div className="space-y-4">
                 <dl className="grid gap-4 sm:grid-cols-3">
@@ -95,7 +96,7 @@ export default async function OccupantPage({ params }: PageProps<"/occupants/[id
                     </Link>
                   </Detail>
                   <Detail label="Bed">{current.a.slot}</Detail>
-                  <Detail label="Moved in">
+                  <Detail label={current.a.checkIn > today ? "Scheduled move-in" : "Moved in"}>
                     {formatDate(current.a.checkIn)}
                     {current.a.checkIn <= today && (
                       <span className="text-muted"> ({daysBetween(current.a.checkIn, today)} days ago)</span>
@@ -106,6 +107,7 @@ export default async function OccupantPage({ params }: PageProps<"/occupants/[id
                   <Detail label="Room given by">{current.assignedBy}</Detail>
                   <Detail label="Notes" empty="None">{current.a.notes}</Detail>
                 </dl>
+                {current.a.checkIn > today && <ActionForm action={cancelReservation.bind(null, current.a.id)} submitLabel="Cancel planned move-in" submitVariant="danger" confirm="Cancel this planned move-in? The reservation will be retained in audit history." />}
                 <div className="space-y-2">
                   <Panel title="Move to another room">
                     <ActionForm action={transferRoom.bind(null, current.a.id)} submitLabel="Move">
@@ -124,7 +126,7 @@ export default async function OccupantPage({ params }: PageProps<"/occupants/[id
                           <Input name="slot" />
                         </Field>
                         <Field label="Date of the move">
-                          <Input name="date" type="date" defaultValue={today} required />
+                          <Input name="date" type="date" defaultValue={today} max={today} required />
                         </Field>
                         <Field label="Keys and cards given" hint="Leave blank to keep the current ones">
                           <Input name="keysIssued" />
@@ -144,7 +146,7 @@ export default async function OccupantPage({ params }: PageProps<"/occupants/[id
                     >
                       <FormGrid>
                         <Field label="Move-out date">
-                          <Input name="date" type="date" defaultValue={today} required />
+                          <Input name="date" type="date" defaultValue={today} max={today} required />
                         </Field>
                         <Field label="Note" hint="e.g. Keys returned, room left clean">
                           <Input name="note" />

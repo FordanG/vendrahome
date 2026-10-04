@@ -13,7 +13,7 @@ export default async function TenantRulesPage() {
 
   return (
     <>
-      <PageHeader title="House rules" />
+      <PageHeader title="House rules" subtitle="Please follow these rules throughout your stay. Contact the front desk if you need clarification." />
       {rules.length === 0 ? (
         <Empty>No house rules have been posted yet.</Empty>
       ) : (

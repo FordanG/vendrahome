@@ -42,11 +42,14 @@ pnpm db:demo                             # demo data and the accounts below
 | Sign in as | Role | Password |
 |---|---|---|
 | `admin` | Admin | the one set by `db:seed` |
+| `demo.admin` | Admin | `demo1234` |
 | `demo.desk` | Front desk & housekeeping | `demo1234` |
 | `demo.fix` | Maintenance | `demo1234` |
 | `demo.juan` (room 203), `demo.maria` (room 312), `demo.paolo` (room 507) | Tenant | `demo1234` |
 
 These passwords are for local testing only. Run `pnpm db:demo:remove` before putting real data in.
+
+The room assignments and counts above describe a fresh run of the current demo script. An existing demo database is not upgraded by running `db:demo` again: it keeps its original rooms, residents, dates and any testing changes. Check the live room board for that database's actual assignments. Do not remove or reseed it if you need to keep those records.
 
 The end-to-end test uses its own separate accounts and database (`e2e/accounts.ts`, `.data/e2e`).
 
@@ -81,3 +84,16 @@ It starts its own server on port 3456 with a fresh database in `.data/e2e` and b
 - Tenant portal: occupant logins; their room, maintenance visits, kitchen and laundry timetable, house rules; problem reports and maintenance or laundry requests that staff approve
 
 Next: billing records and utilities, laundry, housekeeping and maintenance, room inventory, QR codes, feedback.
+
+
+## Account profiles
+
+Every account can edit its display name, optional contact email and mobile number under **My account** (staff) or **Account** (tenants). Profile saves are restricted to the signed-in account and recorded in Audit history. Username, role and access stay under account administration. Contact email is not a sign-in or password-recovery address.
+
+Tenant account profiles are separate from official occupant records; front desk still manages resident information and room assignments. Migration `0006` adds optional profile contact fields and applies on app startup without changing existing account names or logins.
+
+Every role can preview, upload, replace and remove its own profile photo on the same account page. Still JPG, PNG and WebP files up to 2 MB and 20 megapixels are accepted, cropped to 512 × 512, and re-encoded without embedded metadata. Photos are served only to their owner through an authenticated, non-cacheable endpoint. Migration `0007` stores photos separately in the database, so database backups include them. Initials appear when no photo is set.
+
+## Operating rules and recovery
+
+See [Operating rules and rollout](docs/operating-rules.md) for contract/stay rules, service ownership, backup and restore commands, migration precautions and verification limits. Run `pnpm test:rules` for isolated business-rule and backup/restore tests.

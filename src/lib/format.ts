@@ -11,7 +11,8 @@ export function parsePeso(input: FormDataEntryValue | null): number | null {
   if (cleaned === "") return null;
   if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
   const [whole, frac = ""] = cleaned.split(".");
-  return Number(whole) * 100 + Number(frac.padEnd(2, "0"));
+  const amount = Number(whole) * 100 + Number(frac.padEnd(2, "0"));
+  return Number.isSafeInteger(amount) ? amount : null;
 }
 
 export const centavosToInput = (centavos: number | null | undefined) =>
@@ -54,8 +55,11 @@ export function str(input: FormDataEntryValue | null): string | null {
   return v === "" ? null : v;
 }
 
-export const isISODate = (v: string | null): v is string =>
-  !!v && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
+export function isISODate(v: string | null): v is string {
+  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v) || v < "1900-01-01" || v > "2199-12-31") return false;
+  const date = new Date(v + "T00:00:00Z");
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === v;
+}
 
 export function addDaysISO(iso: string, days: number): string {
   return new Date(Date.parse(iso + "T00:00:00Z") + days * 86_400_000).toISOString().slice(0, 10);

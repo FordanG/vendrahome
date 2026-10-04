@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
+import { requestScope } from "@/lib/service-work";
 import { getDb, schema } from "@/db";
 import { requireStaff, ROLE_LABELS, signOut } from "@/lib/auth";
 import type { StaffRole } from "@/db/schema";
@@ -40,6 +41,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
       { href: "/schedules", label: "Kitchen & laundry" },
       { href: "/house-rules", label: "House rules" },
       { href: "/staff", label: "Staff", roles: ["admin"] },
+      { href: "/audit", label: "Audit history", roles: ["admin"] },
     ],
   },
 ];
@@ -60,7 +62,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const [{ waiting }] = await db
     .select({ waiting: count() })
     .from(schema.tenantRequests)
-    .where(eq(schema.tenantRequests.status, "pending"));
+    .where(and(eq(schema.tenantRequests.status, "pending"), requestScope(user)));
 
   const groups: NavGroup[] = NAV.map((g) => ({
     label: g.label,

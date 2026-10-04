@@ -52,8 +52,8 @@ export function ActionForm({
         <Button type="submit" variant={submitVariant} disabled={pending}>
           {pending ? pendingLabel : submitLabel}
         </Button>
-        {state.error && <p className="whitespace-pre-line text-sm text-red-600 dark:text-red-400">{state.error}</p>}
-        {state.ok && <p className="text-sm text-emerald-700 dark:text-emerald-400">{state.ok}</p>}
+        {state.error && <p role="alert" className="whitespace-pre-line text-sm text-red-600 dark:text-red-400">{state.error}</p>}
+        {state.ok && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-400">{state.ok}</p>}
       </div>
     </form>
   );

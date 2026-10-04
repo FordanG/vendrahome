@@ -18,7 +18,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: `tsx e2e/setup-db.ts && next dev -p ${E2E_PORT}`,
+    command: `node --import tsx e2e/setup-db.ts && next dev -p ${E2E_PORT}`,
     env: { PGLITE_DIR: E2E_DB, NEXT_DIST_DIR: ".next/e2e" },
     url: `http://localhost:${E2E_PORT}/login`,
     reuseExistingServer: false,

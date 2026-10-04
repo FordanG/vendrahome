@@ -92,7 +92,7 @@ test("tenant portal", async ({ browser }) => {
     await form.getByRole("button", { name: "Change" }).click();
     await expect(admin.getByText("75 rooms now allow 2 people.")).toBeVisible();
     await admin.goto("/");
-    await expect(admin.getByText(/of 150 beds free/)).toBeVisible();
+    await expect(admin.getByText(/150 physical beds/)).toBeVisible();
   });
 
   const tenant = await signIn(browser, TENANT, { width: 390, height: 844 });
@@ -144,7 +144,8 @@ test("tenant portal", async ({ browser }) => {
     tenant.once("dialog", (d) => d.accept());
     // Newest first, so the first card is the problem report
     await tenant.getByRole("button", { name: "Cancel request" }).first().click();
-    await expect(tenant.getByText("Light bulb is broken")).toHaveCount(0);
+    await expect(tenant.getByText("Light bulb is broken")).toBeVisible();
+    await expect(tenant.getByText("Withdrawn", { exact: true })).toBeVisible();
     await expect(tenant.getByText("Toilet flush is weak, please check.")).toBeVisible();
   });
 

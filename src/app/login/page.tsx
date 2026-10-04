@@ -10,7 +10,7 @@ async function login(_: ActionState, formData: FormData): Promise<ActionState> {
   const username = String(formData.get("username") ?? "");
   const password = String(formData.get("password") ?? "");
   if (!(await signIn(username, password))) {
-    return { error: "Wrong username or password." };
+    return { error: "Unable to sign in. Check your username and password. After repeated attempts, wait 15 minutes." };
   }
   const user = await getCurrentStaff();
   redirect(user ? homeFor(user) : "/");

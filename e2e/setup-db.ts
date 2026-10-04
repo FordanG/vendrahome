@@ -12,7 +12,7 @@ import { ADMIN, E2E_DB, FRONT_DESK, MAINTENANCE, RESIDENT, TENANT } from "./acco
 async function main() {
   const dataDir = path.join(process.cwd(), E2E_DB);
   rmSync(dataDir, { recursive: true, force: true });
-  execFileSync("tsx", ["scripts/seed.ts"], {
+  execFileSync(process.execPath, ["--import", "tsx", "scripts/seed.ts"], {
     stdio: "inherit",
     env: { ...process.env, PGLITE_DIR: dataDir, ADMIN_PASSWORD: ADMIN.password },
   });
@@ -54,6 +54,14 @@ async function main() {
     await bcrypt.hash(RESIDENT.password, 10),
     resident.id,
   ]);
+  const { rows: [client] } = await db.query<{ id: string }>("insert into clients (name) values ('E2E Company') returning id");
+  const { rows: [contract] } = await db.query<{ id: string }>(
+    "insert into contracts (client_id, reference, start_date, end_date, monthly_rent, status) values ($1, 'E2E Contract', $2, $3, 1000000, 'active') returning id",
+    [client.id, addDaysISO(todayISO(), -90), addDaysISO(todayISO(), 365)],
+  );
+  await db.query("insert into contract_rooms (contract_id, room_id) select $1, id from rooms", [contract.id]);
+  await db.query("update occupants set client_id = $1", [client.id]);
+  await db.query("update room_assignments set contract_id = $1", [contract.id]);
   await db.close();
   console.log("E2E database ready.");
 }

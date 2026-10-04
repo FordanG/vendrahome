@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 
 import type { RoomStatus } from "./room-status";
@@ -31,6 +31,7 @@ export type BoardRoom = {
   openRequests: { id: string; kind: "issue" | "maintenance"; urgent: boolean }[];
   /** Marked Needs work by staff, or has open requests. Independent of who lives there. */
   needsWork: boolean;
+  assignableBeds: number;
 };
 
 /** Every room with its derived status as of `today`. */
@@ -74,7 +75,7 @@ export async function getRoomBoard(today: string): Promise<BoardRoom[]> {
       })
       .from(schema.roomAssignments)
       .innerJoin(schema.occupants, eq(schema.roomAssignments.occupantId, schema.occupants.id))
-      .where(isNull(schema.roomAssignments.actualCheckOut))
+      .where(or(isNull(schema.roomAssignments.actualCheckOut), gt(schema.roomAssignments.actualCheckOut, today)))
       .orderBy(asc(schema.roomAssignments.slot), asc(schema.occupants.fullName)),
     db
       .select({
@@ -118,6 +119,7 @@ export async function getRoomBoard(today: string): Promise<BoardRoom[]> {
       contract: c ? { id: c.id, reference: c.reference, clientName: c.clientName, endDate: c.endDate } : null,
       occupants,
       upcoming,
+      assignableBeds: room.condition === "ready" && c ? Math.max(0, room.capacity - mine.length) : 0,
       openRequests,
       needsWork: room.condition === "needs_work" || openRequests.length > 0,
     };

@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gte, ne } from "drizzle-orm";
+import { visitPermission } from "@/lib/service-work";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
 import { addDaysISO, formatDate, formatTimeRange, todayISO } from "@/lib/format";
@@ -30,10 +31,12 @@ function roomsLabel(rows: Row[], roomsPerFloor: Map<number, number>, totalRooms:
   return numbers.length <= 4 ? `Rooms ${numbers.join(", ")}` : `Rooms ${numbers.slice(0, 3).join(", ")} and ${numbers.length - 3} more`;
 }
 
-function VisitForm({ v }: { v: MaintenanceVisit }) {
+function VisitForm({ v, staff, canAssign }: { v: MaintenanceVisit; staff: { id: string; name: string }[]; canAssign: boolean }) {
   return (
     <ActionForm action={updateVisit.bind(null, v.id)}>
       <FormGrid>
+        {canAssign ? <Field label="Assigned to"><Select name="assigneeId" defaultValue={v.assigneeId ?? ""}><option value="">Unassigned</option>{staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>
+          : <p className="text-sm text-muted sm:col-span-2">{v.assigneeId ? "Assigned to you." : "Saving this visit assigns it to you."}</p>}
         <Field label="Status">
           <Select name="status" defaultValue={v.status}>
             {Object.entries(VISIT_STATUS_LABELS).map(([k, label]) => (
@@ -88,11 +91,12 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
   const today = todayISO();
   const db = await getDb();
 
+  const staff = await db.query.staff.findMany({ where: and(eq(schema.staff.active, true), ne(schema.staff.role, "tenant")), orderBy: [asc(schema.staff.name)] });
   const visitQuery = db
     .select({ v: schema.maintenanceVisits, roomNumber: schema.rooms.number, floor: schema.rooms.floor })
     .from(schema.maintenanceVisits)
     .innerJoin(schema.rooms, eq(schema.maintenanceVisits.roomId, schema.rooms.id));
-  const [visits, rooms] = await Promise.all([
+  const [allVisits, rooms] = await Promise.all([
     view === "upcoming"
       ? // Everything still open, including overdue visits nobody closed.
         visitQuery
@@ -111,6 +115,8 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
       .from(schema.rooms)
       .orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
   ]);
+  const permissions = await Promise.all(allVisits.map(({v}) => visitPermission(user, v)));
+  const visits = allVisits.filter((_, i) => !permissions[i]);
   const roomsPerFloor = new Map<number, number>();
   for (const r of rooms) roomsPerFloor.set(r.floor, (roomsPerFloor.get(r.floor) ?? 0) + 1);
 
@@ -118,7 +124,7 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
   const groups = new Map<string, Row[]>();
   for (const row of visits) {
     const v = row.v;
-    const key = v.requestId ? v.id : [v.date, v.title, v.timeFrom, v.timeTo, v.status].join("|");
+    const key = v.requestId ? v.id : [v.date, v.title, v.timeFrom, v.timeTo, v.status, v.assigneeId].join("|");
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
   const dates = [...new Set(visits.map((x) => x.v.date))];
@@ -165,7 +171,7 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
                           <VisitSummary v={first} rooms={`Room ${g[0].roomNumber}`} />
                           <div className="border-t border-border bg-background/40 px-4 py-3">
                             {first.notes && <p className="mb-3 whitespace-pre-wrap text-sm text-muted">{first.notes}</p>}
-                            {canManage ? <VisitForm v={first} /> : !first.notes && <p className="text-sm text-muted">No notes.</p>}
+                            {canManage ? <VisitForm v={first} staff={staff} canAssign={user.role !== "maintenance"} /> : !first.notes && <p className="text-sm text-muted">No notes.</p>}
                           </div>
                         </details>
                       );
@@ -206,7 +212,7 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
                                   </summary>
                                   {canManage && (
                                     <div className="border-t border-border px-3 py-3">
-                                      <VisitForm v={v} />
+                                      <VisitForm v={v} staff={staff} canAssign={user.role !== "maintenance"} />
                                     </div>
                                   )}
                                 </details>
@@ -226,6 +232,7 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
           <Card className="self-start lg:sticky lg:top-8">
             <SectionTitle>Schedule a visit</SectionTitle>
             <ActionForm action={scheduleVisits} submitLabel="Schedule" resetOnSuccess>
+              {user.role !== "maintenance" && <Field label="Assigned to"><Select name="assigneeId"><option value="">Unassigned</option>{staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>}
               <Field label="What for" hint="e.g. Aircon cleaning, Monthly room check, Pest control">
                 <Input name="title" required />
               </Field>

@@ -1,5 +1,6 @@
 import "server-only";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, gt, or } from "drizzle-orm";
+import { todayISO } from "./format";
 import { getDb, schema } from "@/db";
 import type { Tone } from "@/components/ui";
 import type { ScheduleEntry, TenantRequest } from "@/db/schema";
@@ -56,7 +57,8 @@ export const REQUEST_KIND_LABELS = {
 } as const;
 
 /** Problem reports read as a ticket; maintenance and laundry requests read as an approval. */
-export function requestStatusLabel(r: Pick<TenantRequest, "kind" | "status">): string {
+export function requestStatusLabel(r: Pick<TenantRequest, "kind" | "status"> & { cancelledAt?: Date | null }): string {
+  if (r.cancelledAt) return "Withdrawn";
   if (r.kind === "issue") {
     return { pending: "New", approved: "Being fixed", declined: "Closed", done: "Fixed" }[r.status];
   }
@@ -100,7 +102,7 @@ export async function getCurrentStay(occupantId: string) {
     .select({ a: schema.roomAssignments, room: schema.rooms })
     .from(schema.roomAssignments)
     .innerJoin(schema.rooms, eq(schema.roomAssignments.roomId, schema.rooms.id))
-    .where(and(eq(schema.roomAssignments.occupantId, occupantId), isNull(schema.roomAssignments.actualCheckOut)))
+    .where(and(eq(schema.roomAssignments.occupantId, occupantId), lte(schema.roomAssignments.checkIn, todayISO()), or(isNull(schema.roomAssignments.actualCheckOut), gt(schema.roomAssignments.actualCheckOut, todayISO()))))
     .orderBy(asc(schema.roomAssignments.checkIn))
     .limit(1);
   return row ?? null;

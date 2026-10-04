@@ -16,6 +16,7 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import { asc, eq, inArray, isNull, or } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import * as schema from "../src/db/schema";
+import { PROPERTY_RULES } from "../src/lib/property-rules";
 import { addDaysISO, todayISO } from "../src/lib/format";
 
 const PASSWORD = "demo1234";
@@ -127,6 +128,8 @@ async function add() {
     .values([
       { name: "Maricel Santos (demo)", username: "demo.desk", role: "front_desk", passwordHash: hash },
       { name: "Rodel Bautista (demo)", username: "demo.fix", role: "maintenance", passwordHash: hash },
+      // An admin to try the admin pages with, so the real admin password never has to be shared.
+      { name: "Carmela Reyes (demo)", username: "demo.admin", role: "admin", passwordHash: hash },
     ])
     .returning();
   ids.staff.push(...staffRows.map((s) => s.id));
@@ -275,20 +278,9 @@ async function add() {
     .returning();
   ids.staff.push(...tenantLogins.map((s) => s.id));
 
-  // House rules
-  const rules = await db
-    .insert(schema.houseRules)
-    .values([
-      { position: 1, title: "Quiet hours", body: "Keep noise down from 10 PM to 6 AM. Many residents work night shifts and sleep during the day, so please be considerate of your roommates at all hours." },
-      { position: 2, title: "Shared rooms", body: "Keep your things in your own bed area and locker. Agree with your roommates on lights-out and aircon settings, and tell the front desk if you can't settle something." },
-      { position: 3, title: "Visitors", body: "Visitors register at the front desk and leave a valid ID. Visiting hours are 8 AM to 9 PM, in the lobby only. No overnight guests." },
-      { position: 4, title: "Kitchen", body: "Use the kitchen only during your floor's time slots. Wash, dry and put away everything you use, and wipe the counters and stove." },
-      { position: 5, title: "Laundry", body: "Leave your laundry bag at the lobby by 8 AM on pickup days. Label every bag with your room number and bed. Laundry is charged per kilo." },
-      { position: 6, title: "No smoking or vaping", body: "Smoking and vaping are not allowed inside the building. Use the smoking area at the back gate." },
-      { position: 7, title: "Garbage", body: "Separate biodegradable, recyclable and residual waste. Bring garbage to the bins at the ground floor before 9 PM." },
-      { position: 8, title: "Report problems early", body: "Report leaks, broken fixtures or aircon problems through the app as soon as you notice them." },
-    ])
-    .returning();
+  // Do not overwrite or duplicate the hotel's published policy with demo content.
+  const hasRules = await db.query.houseRules.findFirst();
+  const rules = hasRules ? [] : await db.insert(schema.houseRules).values(PROPERTY_RULES).returning();
   ids.houseRules.push(...rules.map((r) => r.id));
 
   // Kitchen: each floor has its own breakfast and dinner slot every day. Laundry: pickup Tuesday and Friday.
@@ -382,6 +374,7 @@ async function add() {
   ${visits.length} maintenance visits, ${requests.length} tenant requests, room ${repaint.number} marked needs work
 
 Sign in with any of these (password for all: ${PASSWORD}):
+  demo.admin   admin
   demo.desk    front desk & housekeeping
   demo.fix     maintenance
 ${TENANTS.map((t) => `  ${t.username.padEnd(12)} tenant, room ${t.room} (${occupants[t.index].fullName})`).join("\n")}

@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq, lte } from "drizzle-orm";
+import { requestScope } from "@/lib/service-work";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
 import { getRoomBoard, STATUS_LABELS, type RoomStatus } from "@/lib/rooms";
 import { STATUS_HELP } from "@/lib/room-status";
-import { daysBetween, formatDate, todayISO } from "@/lib/format";
+import { addDaysISO, daysBetween, formatDate, todayISO } from "@/lib/format";
 import { SLOT, SWATCH } from "@/components/list";
 import { PageHeader } from "@/components/ui";
 import { FloorFolds } from "./floor-folds";
@@ -41,7 +42,7 @@ function BoardKey({ types }: { types: (string | null)[] }) {
             <span className="plate text-[11px] font-bold leading-none">305</span>
             <span className="text-[9px] font-semibold leading-none">1 free</span>
           </dt>
-          <dd>Beds still free in the room. Nothing shown when every bed is taken.</dd>
+          <dd>Beds ready to assign under the current contract, after reservations.</dd>
         </div>
         <div className="flex items-center gap-2.5">
           <dt className={`${example} ${SLOT.occupied} ring-[3px] ring-warn ring-offset-1 ring-offset-surface`} aria-hidden>
@@ -78,7 +79,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
   const db = await getDb();
   const [all, [{ waiting }]] = await Promise.all([
     getRoomBoard(today),
-    db.select({ waiting: count() }).from(schema.tenantRequests).where(eq(schema.tenantRequests.status, "pending")),
+    db.select({ waiting: count() }).from(schema.tenantRequests).where(and(eq(schema.tenantRequests.status, "pending"), requestScope(user))),
   ]);
   const floors = [...new Set(all.map((r) => r.floor))];
   const perFloor = Math.max(...floors.map((f) => all.filter((r) => r.floor === f).length), 1);
@@ -87,27 +88,26 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
   ) as Record<RoomStatus, number>;
   const people = all.reduce((n, r) => n + r.occupants.length, 0);
   const beds = all.reduce((n, r) => n + r.capacity, 0);
+  const assignable = all.reduce((n, r) => n + r.assignableBeds, 0);
   const types = [...new Set(all.map((r) => r.typeName).filter(Boolean))];
 
-  const endingContracts = !canSeeContracts ? [] : [
-    ...new Map(
-      all
-        .filter((r) => r.contract && daysBetween(today, r.contract.endDate) <= 90)
-        .map((r) => [r.contract!.id, r.contract!]),
-    ).values(),
-  ];
+  const endingContracts = !canSeeContracts ? [] : await db.select({
+    id: schema.contracts.id, reference: schema.contracts.reference, endDate: schema.contracts.endDate, clientName: schema.clients.name,
+  }).from(schema.contracts).innerJoin(schema.clients, eq(schema.contracts.clientId, schema.clients.id))
+    .where(and(eq(schema.contracts.status, "active"), lte(schema.contracts.endDate, addDaysISO(today, 90))));
+  const uncovered = canSeeContracts ? all.filter(r => r.occupants.length > 0 && !r.contract) : [];
   const checkOutsSoon = !canSeePeople ? [] : all.flatMap((r) =>
     r.occupants
       .filter((o) => o.expectedCheckOut && daysBetween(today, o.expectedCheckOut) <= 7)
       .map((o) => ({ ...o, room: r.number })),
   );
-  const hasNotices = waiting > 0 || endingContracts.length > 0 || checkOutsSoon.length > 0;
+  const hasNotices = uncovered.length > 0 || waiting > 0 || endingContracts.length > 0 || checkOutsSoon.length > 0;
 
   return (
     <>
       <PageHeader
         title="Room board"
-        subtitle={`${formatDate(today)}. ${people} tenants, ${beds - people} of ${beds} beds free.`}
+        subtitle={`${formatDate(today)}. ${people} tenants, ${assignable} beds available under current contracts (${beds} physical beds).`}
       />
 
       {hasNotices && (
@@ -126,9 +126,12 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
               <Link className="font-medium underline underline-offset-2" href={`/contracts/${c.id}`}>
                 {c.reference}
               </Link>{" "}
-              for {c.clientName} ends {formatDate(c.endDate)}, in {daysBetween(today, c.endDate)} days.
+              for {c.clientName} {c.endDate < today ? "expired" : "ends"} {formatDate(c.endDate)}. {c.endDate < today ? "Resolve continuing stays or renew coverage." : `${daysBetween(today, c.endDate)} days left.`}
             </li>
           ))}
+          {uncovered.map(r => <li key={r.id} className="border-l-4 border-l-attention px-4 py-3">
+            <Link className="underline" href={`/rooms/${r.id}`}>Room {r.number}</Link> has residents but no current active contract. Review coverage.
+          </li>)}
           {checkOutsSoon.map((o) => (
             <li key={o.assignmentId} className="border-l-4 border-l-border px-4 py-3 sm:py-2.5">
               <Link className="font-medium underline underline-offset-2" href={`/occupants/${o.occupantId}`}>
@@ -172,7 +175,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
         floors={floors.map((f) => {
           const rooms = all.filter((r) => r.floor === f);
           const lived = rooms.filter((r) => r.status === "occupied").length;
-          const freeBeds = rooms.reduce((n, r) => n + (r.status === "not_available" ? 0 : r.capacity - r.occupants.length), 0);
+          const freeBeds = rooms.reduce((n, r) => n + r.assignableBeds, 0);
           const attention = rooms.filter((r) => r.needsWork).length;
           const urgentCount = rooms.reduce((n, r) => n + r.openRequests.filter((q) => q.urgent).length, 0);
           return {
@@ -222,11 +225,13 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
                     const dim = status && !matches(r, status);
                     const names = canSeePeople ? r.occupants.map((o) => o.fullName).join(", ") : "";
                     const flagged = r.needsWork && r.status !== "needs_work";
+                    const blocked = r.condition === "not_available";
                     const urgent = r.openRequests.some((q) => q.urgent);
                     const label = [
                       `Room ${r.number}`,
                       r.typeName,
                       STATUS_LABELS[r.status],
+                      blocked && "Out of service",
                       `${r.occupants.length} of ${r.capacity} beds taken`,
                       names,
                       r.openRequests.length > 0 && `${r.openRequests.length} open request${r.openRequests.length === 1 ? "" : "s"}`,
@@ -242,7 +247,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
                         aria-label={label}
                         className={`relative flex h-16 flex-col justify-between rounded-md border px-2 py-1.5 transition-opacity hover:ring-2 hover:ring-brand sm:h-[4.5rem] ${SLOT[r.status]} ${
                           flagged ? "ring-[3px] ring-warn ring-offset-1 ring-offset-surface" : ""
-                        } ${dim ? "opacity-20" : ""}`}
+                        } ${blocked ? "ring-2 ring-attention" : ""} ${dim ? "opacity-20" : ""}`}
                       >
                         <span className="plate text-lg font-bold leading-none">{r.number}</span>
                         {/* The count sits on the slot's corner so it never squeezes the room number. */}
@@ -257,8 +262,9 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
                         )}
                         <span className="text-[11px] leading-tight">
                           {types.length > 1 && <span className="block truncate opacity-90">{shortType(r.typeName)}</span>}
-                          {r.status !== "not_available" && r.occupants.length < r.capacity && (
-                            <span className="block whitespace-nowrap font-semibold">{r.capacity - r.occupants.length} free</span>
+                          {blocked && <span className="block font-semibold">Blocked</span>}
+                          {r.assignableBeds > 0 && (
+                            <span className="block whitespace-nowrap font-semibold">{r.assignableBeds} free</span>
                           )}
                         </span>
                       </Link>
