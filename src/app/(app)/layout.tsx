@@ -35,9 +35,14 @@ const NAV: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
+    label: "Money",
+    items: [{ href: "/billing", label: "Billing", roles: ["admin", "front_desk"] }],
+  },
+  {
     label: "Property",
     items: [
       { href: "/rooms", label: "Rooms", icon: "rooms" },
+      { href: "/inventory", label: "Room inventory" },
       { href: "/schedules", label: "Kitchen & laundry" },
       { href: "/house-rules", label: "House rules" },
       { href: "/staff", label: "Staff", roles: ["admin"] },

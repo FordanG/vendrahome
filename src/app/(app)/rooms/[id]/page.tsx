@@ -51,6 +51,9 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
           <span className="inline-flex items-center gap-2">
             <Badge tone={STATUS_TONES[live.status]}>{STATUS_LABELS[live.status]}</Badge>
             Floor {room.floor}, {live.typeName ?? "no room type set"}, {bedsTaken(live.occupants.length, room.capacity)}
+            {CAN.viewInventory.includes(user.role) && (
+              <Link className="underline underline-offset-2" href={`/inventory/rooms/${room.id}`}>Items in this room</Link>
+            )}
           </span>
         }
         actions={

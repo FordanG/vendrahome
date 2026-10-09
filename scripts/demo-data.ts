@@ -13,11 +13,11 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
-import { asc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import * as schema from "../src/db/schema";
 import { PROPERTY_RULES } from "../src/lib/property-rules";
-import { addDaysISO, todayISO } from "../src/lib/format";
+import { addDaysISO, addMonthsISO, formatDate, todayISO } from "../src/lib/format";
 
 const PASSWORD = "demo1234";
 
@@ -55,6 +55,9 @@ type DemoIds = {
   visits: string[];
   requests: string[];
   roomTypes?: string[];
+  // Added with billing and inventory (older demo files don't have these yet).
+  money?: { statements: string[]; charges: string[]; payments: string[]; deposits: string[]; utilityBills: string[] };
+  items?: { templates: string[]; roomItems: string[]; checks: string[] };
   roomsBefore?: { id: string; roomTypeId: string | null; capacity: number; condition: "ready" | "needs_work" | "not_available"; notes: string | null }[];
 };
 
@@ -69,7 +72,14 @@ async function open() {
 async function add() {
   const { client, db, idsFile } = await open();
   if (existsSync(idsFile)) {
-    console.log("Demo data is already loaded. Remove it first with: pnpm db:demo:remove");
+    const loaded: DemoIds = JSON.parse(readFileSync(idsFile, "utf8"));
+    if (loaded.money && loaded.items) {
+      console.log("Demo data is already loaded. Remove it first with: pnpm db:demo:remove");
+    } else {
+      await addMoneyAndItems(db, loaded);
+      writeFileSync(idsFile, JSON.stringify(loaded, null, 2));
+      console.log("Added demo billing (statements, payments, utilities, deposit) and room inventory to the demo data already loaded.");
+    }
     await client.close();
     return;
   }
@@ -362,6 +372,7 @@ async function add() {
   const visits = await db.insert(schema.maintenanceVisits).values(visitValues).returning();
   ids.visits.push(...visits.map((v) => v.id));
 
+  await addMoneyAndItems(db, ids);
   writeFileSync(idsFile, JSON.stringify(ids, null, 2));
   await client.close();
 
@@ -380,7 +391,202 @@ Sign in with any of these (password for all: ${PASSWORD}):
 ${TENANTS.map((t) => `  ${t.username.padEnd(12)} tenant, room ${t.room} (${occupants[t.index].fullName})`).join("\n")}
 ${admin ? `  ${admin.username.padEnd(12)} your own admin password` : ""}
 
+Also: two issued statements (the second partly unpaid and overdue), utility bills, the deposit,
+  tenant laundry charges, and a full room inventory with contract-start checks.
+
 Remove it all later with: pnpm db:demo:remove`);
+}
+
+type DB = Awaited<ReturnType<typeof open>>["db"];
+
+// Standard room contents. Prices are replacement costs in centavos.
+const ITEM_LIST: { name: string; category: "furniture" | "appliance" | "fixture" | "issued"; perBed?: boolean; quantity?: number; cost: number; service?: number; loftOnly?: boolean }[] = [
+  { name: "Bed frame", category: "furniture", perBed: true, cost: 8_000_00 },
+  { name: "Mattress", category: "furniture", perBed: true, cost: 6_000_00 },
+  { name: "Cabinet", category: "furniture", perBed: true, cost: 5_000_00 },
+  { name: "Chair", category: "furniture", perBed: true, cost: 1_500_00 },
+  { name: "Study table", category: "furniture", quantity: 1, cost: 4_500_00 },
+  { name: "Loft ladder", category: "fixture", quantity: 1, cost: 3_500_00, loftOnly: true },
+  { name: "Aircon", category: "appliance", quantity: 1, cost: 25_000_00, service: 6 },
+  { name: "Curtains (set)", category: "fixture", quantity: 1, cost: 1_500_00 },
+  { name: "Room key", category: "issued", perBed: true, cost: 300_00 },
+  { name: "Key card", category: "issued", perBed: true, cost: 250_00 },
+];
+
+/**
+ * Billing and room inventory for the demo contract: two months of statements,
+ * utilities, the deposit, a few tenant charges, and every room's items and checks.
+ * Works on a fresh demo and on one loaded before billing existed.
+ */
+async function addMoneyAndItems(db: DB, ids: DemoIds) {
+  const today = todayISO();
+  const money = (ids.money = { statements: [], charges: [], payments: [], deposits: [], utilityBills: [] } as NonNullable<DemoIds["money"]>);
+  const items = (ids.items = { templates: [], roomItems: [], checks: [] } as NonNullable<DemoIds["items"]>);
+  const contract = await db.query.contracts.findFirst({ where: inArray(schema.contracts.id, ids.contracts.length ? ids.contracts : ["00000000-0000-0000-0000-000000000000"]) });
+  if (!contract) return;
+  const desk = await db.query.staff.findFirst({ where: eq(schema.staff.username, "demo.desk") });
+  const admin = (await db.query.staff.findFirst({ where: eq(schema.staff.username, "demo.admin") })) ?? desk;
+  const by = admin?.id ?? null;
+  const type = async (code: string) => (await db.query.chargeTypes.findFirst({ where: eq(schema.chargeTypes.code, code) }))!;
+  const [rentType, utilityType, laundryType, lostKeyType] = await Promise.all([type("rent"), type("utility"), type("laundry"), type("lost_key")]);
+  const charge = async (v: typeof schema.charges.$inferInsert) => {
+    const [row] = await db.insert(schema.charges).values({ createdBy: by, ...v }).returning();
+    money.charges.push(row.id);
+    return row;
+  };
+  const pay = async (v: typeof schema.payments.$inferInsert) => {
+    const [row] = await db.insert(schema.payments).values({ createdBy: by, ...v }).returning();
+    money.payments.push(row.id);
+    return row;
+  };
+
+  // Deposit received when the contract started.
+  const [deposit] = await db.insert(schema.depositEntries).values({
+    contractId: contract.id, kind: "received", amount: contract.deposit, entryOn: contract.startDate,
+    description: "Security deposit, bank transfer ref. BDO-2026-0412", createdBy: by,
+  }).returning();
+  money.deposits.push(deposit.id);
+
+  // Utilities: one electricity and one water bill for each full month so far.
+  const electricity = await db.query.utilityTypes.findFirst({ where: eq(schema.utilityTypes.name, "Electricity") });
+  const water = await db.query.utilityTypes.findFirst({ where: eq(schema.utilityTypes.name, "Water") });
+  const utilityFor = async (periodStart: string, k: number) => {
+    const periodEnd = addDaysISO(addMonthsISO(periodStart, 1), -1);
+    if (periodEnd > today) return;
+    for (const [u, amount] of [[electricity, [186_420_55, 201_337_10, 194_008_80][k % 3]], [water, [38_210_00, 41_005_50, 39_870_25][k % 3]]] as const) {
+      if (!u) continue;
+      const c = await charge({
+        chargeTypeId: utilityType.id, billTo: "company", contractId: contract.id, amount, chargedOn: periodEnd,
+        description: `${u.name}, ${formatDate(periodStart)} – ${formatDate(periodEnd)}`,
+      });
+      const [bill] = await db.insert(schema.utilityBills).values({
+        utilityTypeId: u.id, contractId: contract.id, periodStart, periodEnd, dueDate: addDaysISO(periodEnd, 14), method: "bill", amount, chargeId: c.id, createdBy: by,
+      }).returning();
+      money.utilityBills.push(bill.id);
+    }
+  };
+
+  // Statements for every month that has started more than a week ago.
+  let previous = 0;
+  for (let month = 1; ; month++) {
+    const periodStart = addMonthsISO(contract.startDate, month - 1);
+    if (periodStart > addDaysISO(today, -7)) break;
+    const periodEnd = addDaysISO(addMonthsISO(contract.startDate, month), -1);
+    const issuedOn = periodStart;
+    const dueDate = addDaysISO(issuedOn, 7);
+    if (month > 1) await utilityFor(addMonthsISO(contract.startDate, month - 2), month - 2);
+    const unbilled = await db.select().from(schema.charges).where(and(eq(schema.charges.contractId, contract.id), eq(schema.charges.billTo, "company"), isNull(schema.charges.statementId)));
+    const unapplied = await db.select().from(schema.payments).where(and(eq(schema.payments.contractId, contract.id), eq(schema.payments.billTo, "company"), isNull(schema.payments.statementId)));
+    const newCharges = contract.monthlyRent + unbilled.reduce((n, c) => n + c.amount, 0);
+    const paid = unapplied.reduce((n, p) => n + p.amount, 0);
+    const [statement] = await db.insert(schema.statements).values({
+      contractId: contract.id, number: `${contract.reference}-${String(month).padStart(2, "0")}`, rentMonth: month, periodStart, periodEnd, issuedOn, dueDate,
+      previousBalance: previous, newCharges, paymentsReceived: paid, balanceDue: previous + newCharges - paid, createdBy: by,
+    }).returning();
+    money.statements.push(statement.id);
+    await charge({
+      chargeTypeId: rentType.id, billTo: "company", contractId: contract.id, amount: contract.monthlyRent, chargedOn: periodStart, rentMonth: month, statementId: statement.id,
+      description: `Rent, month ${month} (${formatDate(periodStart)} – ${formatDate(periodEnd)})`,
+    });
+    for (const c of unbilled) await db.update(schema.charges).set({ statementId: statement.id }).where(eq(schema.charges.id, c.id));
+    for (const p of unapplied) await db.update(schema.payments).set({ statementId: statement.id }).where(eq(schema.payments.id, p.id));
+    previous = statement.balanceDue;
+    // The company pays each statement a few days after it's issued; the latest one only covers the rent.
+    const payOn = addDaysISO(issuedOn, 4);
+    if (payOn <= today) {
+      const isLatest = addMonthsISO(contract.startDate, month) > addDaysISO(today, -7);
+      await pay({
+        billTo: "company", contractId: contract.id, method: "bank_transfer", receivedOn: payOn,
+        amount: isLatest ? contract.monthlyRent : statement.balanceDue, reference: `BDO-${String(70412 + month)}`, officialReceiptNo: `OR-${String(1000 + month)}`,
+      });
+    }
+  }
+  // This month's utilities are in but not billed yet, so the next statement has something to take in.
+  const lastFull = addMonthsISO(contract.startDate, Math.max(money.statements.length - 1, 0));
+  await utilityFor(lastFull, money.statements.length);
+
+  // Tenant charges: laundry by the kilo and a lost key card.
+  const tenants = await db
+    .select({ occupantId: schema.staff.occupantId, username: schema.staff.username })
+    .from(schema.staff)
+    .where(inArray(schema.staff.username, TENANTS.map((t) => t.username)));
+  const stayOf = async (occupantId: string) => db.query.roomAssignments.findFirst({ where: and(eq(schema.roomAssignments.occupantId, occupantId), isNull(schema.roomAssignments.actualCheckOut)) });
+  for (const [i, t] of tenants.entries()) {
+    if (!t.occupantId) continue;
+    const stay = await stayOf(t.occupantId);
+    const kilos = [4, 6, 3][i % 3];
+    const first = await charge({ chargeTypeId: laundryType.id, billTo: "occupant", contractId: contract.id, occupantId: t.occupantId, roomId: stay?.roomId, amount: kilos * 60_00, chargedOn: addDaysISO(today, -12), description: `Laundry, ${kilos} kg at ₱60/kg` });
+    await charge({ chargeTypeId: laundryType.id, billTo: "occupant", contractId: contract.id, occupantId: t.occupantId, roomId: stay?.roomId, amount: (kilos + 1) * 60_00, chargedOn: addDaysISO(today, -5), description: `Laundry, ${kilos + 1} kg at ₱60/kg` });
+    await pay({ billTo: "occupant", occupantId: t.occupantId, method: "cash", receivedOn: addDaysISO(today, -10), amount: first.amount });
+    if (t.username === "demo.paolo") {
+      await charge({ chargeTypeId: lostKeyType.id, billTo: "occupant", contractId: contract.id, occupantId: t.occupantId, roomId: stay?.roomId, amount: 250_00, chargedOn: addDaysISO(today, -3), description: "Replacement key card" });
+    }
+  }
+
+  // Room inventory: a standard list per room type, items in every room, and checks.
+  const rooms = await db.select().from(schema.rooms).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number));
+  const roomTypes = await db.select().from(schema.roomTypes);
+  for (const rt of roomTypes) {
+    const list = ITEM_LIST.filter((it) => !it.loftOnly || rt.name === "Loft");
+    const rows = await db.insert(schema.itemTemplates).values(list.map((it, position) => ({
+      roomTypeId: rt.id, name: it.name, category: it.category, quantity: it.perBed ? rt.defaultCapacity : it.quantity ?? 1,
+      replacementCost: it.cost, serviceEveryMonths: it.service ?? null, position,
+    }))).returning();
+    items.templates.push(...rows.map((r) => r.id));
+  }
+  const typeName = new Map(roomTypes.map((t) => [t.id, t.name]));
+  const covered = new Set((await db.select({ roomId: schema.contractRooms.roomId }).from(schema.contractRooms).where(eq(schema.contractRooms.contractId, contract.id))).map((r) => r.roomId));
+  const skipStartCheck = new Set(rooms.filter((r) => covered.has(r.id)).slice(-4).map((r) => r.id));
+  const secondFloor = Math.min(...rooms.map((r) => r.floor)) + 1;
+  for (const room of rooms) {
+    const isLoft = typeName.get(room.roomTypeId ?? "") === "Loft";
+    const list = ITEM_LIST.filter((it) => !it.loftOnly || isLoft);
+    const created = await db.insert(schema.roomItems).values(list.map((it) => ({
+      roomId: room.id, name: it.name, category: it.category, quantity: it.perBed ? room.capacity : it.quantity ?? 1, replacementCost: it.cost,
+      serviceEveryMonths: it.service ?? null,
+      // Second-floor aircons were last cleaned long ago, so they show as due for service.
+      lastServicedOn: it.service ? (room.floor === secondFloor ? addDaysISO(today, -175) : addDaysISO(contract.startDate, -10)) : null,
+      brand: it.name === "Aircon" ? "Carrier" : null, model: it.name === "Aircon" ? "Aura Inverter 1.0 HP" : null,
+      tagCode: it.name === "Aircon" ? `AC-${room.number}` : null, createdAt: new Date(`${contract.startDate}T09:00:00+08:00`),
+    }))).returning();
+    items.roomItems.push(...created.map((c) => c.id));
+    await db.insert(schema.itemEvents).values(created.map((c) => ({ itemId: c.id, kind: "added" as const, toRoomId: room.id, condition: "good" as const, note: "From the standard list", staffId: by, at: new Date(`${contract.startDate}T09:00:00+08:00`) })));
+    if (!covered.has(room.id) || skipStartCheck.has(room.id)) continue;
+    const [check] = await db.insert(schema.inventoryChecks).values({
+      roomId: room.id, kind: "contract_start", contractId: contract.id, checkedOn: contract.startDate, checkedBy: desk?.id ?? by,
+      signedBy: "Liza Mercado (Pacific Outsourcing)", notes: "Walk-through at contract start.",
+    }).returning();
+    items.checks.push(check.id);
+    await db.insert(schema.inventoryCheckLines).values(created.map((c) => ({ checkId: check.id, itemId: c.id, found: c.quantity, condition: "good" as const })));
+  }
+
+  // A few things that need attention, and one move-out check with a missing key card.
+  const itemIn = async (number: string, name: string) => {
+    const room = rooms.find((r) => r.number === number);
+    return room ? db.query.roomItems.findFirst({ where: and(eq(schema.roomItems.roomId, room.id), eq(schema.roomItems.name, name)) }) : undefined;
+  };
+  for (const [number, name, condition, note] of [["110", "Aircon", "damaged", "Leaking water onto the floor."], ["305", "Chair", "fair", "Seat cushion worn."], ["512", "Curtains (set)", "missing", "Not in the room at the spot check."]] as const) {
+    const item = await itemIn(number, name);
+    if (!item) continue;
+    await db.update(schema.roomItems).set({ condition }).where(eq(schema.roomItems.id, item.id));
+    await db.insert(schema.itemEvents).values({ itemId: item.id, kind: "condition", condition, note, staffId: desk?.id ?? by, at: new Date(`${addDaysISO(today, -2)}T10:00:00+08:00`) });
+  }
+  const leaver = await db.query.roomAssignments.findFirst({
+    where: and(inArray(schema.roomAssignments.id, ids.assignments.length ? ids.assignments : ["00000000-0000-0000-0000-000000000000"]), isNotNull(schema.roomAssignments.actualCheckOut)),
+  });
+  if (leaver) {
+    const roomItems = await db.select().from(schema.roomItems).where(eq(schema.roomItems.roomId, leaver.roomId));
+    for (const [kind, on] of [["move_in", leaver.checkIn], ["move_out", leaver.actualCheckOut!]] as const) {
+      const [check] = await db.insert(schema.inventoryChecks).values({ roomId: leaver.roomId, kind, contractId: contract.id, assignmentId: leaver.id, checkedOn: on, checkedBy: desk?.id ?? by, signedBy: kind === "move_out" ? "Signed by the tenant" : null }).returning();
+      items.checks.push(check.id);
+      await db.insert(schema.inventoryCheckLines).values(roomItems.map((it) => ({
+        checkId: check.id, itemId: it.id,
+        found: kind === "move_out" && it.name === "Key card" ? it.quantity - 1 : it.quantity,
+        condition: "good" as const,
+        note: kind === "move_out" && it.name === "Key card" ? "One key card not returned." : null,
+      })));
+    }
+  }
 }
 
 async function remove() {
@@ -394,6 +600,21 @@ async function remove() {
   const some = (list: string[] | undefined) => (list?.length ? list : ["00000000-0000-0000-0000-000000000000"]);
 
   await db.transaction(async (tx) => {
+    // Billing and inventory for the demo contract and demo people, including anything added while testing.
+    const contracts = some(ids.contracts), people = some(ids.occupants);
+    await tx.delete(schema.inventoryChecks).where(or(
+      inArray(schema.inventoryChecks.id, some(ids.items?.checks)),
+      inArray(schema.inventoryChecks.contractId, contracts),
+      inArray(schema.inventoryChecks.assignmentId, some(ids.assignments)),
+    ));
+    await tx.delete(schema.utilityBills).where(or(inArray(schema.utilityBills.id, some(ids.money?.utilityBills)), inArray(schema.utilityBills.contractId, contracts)));
+    await tx.delete(schema.depositEntries).where(or(inArray(schema.depositEntries.id, some(ids.money?.deposits)), inArray(schema.depositEntries.contractId, contracts)));
+    await tx.delete(schema.payments).where(or(inArray(schema.payments.id, some(ids.money?.payments)), inArray(schema.payments.contractId, contracts), inArray(schema.payments.occupantId, people)));
+    await tx.delete(schema.charges).where(or(inArray(schema.charges.id, some(ids.money?.charges)), inArray(schema.charges.contractId, contracts), inArray(schema.charges.occupantId, people)));
+    await tx.delete(schema.statements).where(or(inArray(schema.statements.id, some(ids.money?.statements)), inArray(schema.statements.contractId, contracts)));
+    await tx.delete(schema.roomItems).where(inArray(schema.roomItems.id, some(ids.items?.roomItems)));
+    await tx.delete(schema.itemTemplates).where(inArray(schema.itemTemplates.id, some(ids.items?.templates)));
+
     // Requests and visits the demo people made while testing go too.
     const requests = await tx
       .select({ id: schema.tenantRequests.id })

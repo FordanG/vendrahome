@@ -320,6 +320,292 @@ export const tenantRequests = pgTable(
   (t) => [index("requests_status_idx").on(t.status), index("requests_occupant_idx").on(t.occupantId)],
 );
 
+// ---------------------------------------------------------------------------
+// Photos: bills, payment proofs and room items. Stored re-encoded (WebP, no
+// metadata) like profile photos. `scope` decides which roles may open them.
+export const photoScope = pgEnum("photo_scope", ["billing", "inventory"]);
+
+export const photos = pgTable("photos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  scope: photoScope("scope").notNull(),
+  data: text("data").notNull(),
+  uploadedBy: uuid("uploaded_by").references(() => staff.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Billing. Every amount owed is a row in `charges` and every amount received a
+// row in `payments`, for either a company (through its contract) or one tenant.
+// Rows are never edited or deleted once money depends on them: a mistake gets a
+// reversing row (negative amount, `reversesId` set).
+
+export const billTo = pgEnum("bill_to", ["company", "occupant"]);
+
+// `code` marks the kinds the app itself creates (rent, utilities, damage...).
+export const chargeTypes = pgTable("charge_types", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  code: text("code").unique(),
+  name: text("name").notNull().unique(),
+  defaultBillTo: billTo("default_bill_to").notNull().default("company"),
+  active: boolean("active").notNull().default(true),
+  position: integer("position").notNull().default(0),
+});
+
+// Who pays each kind of charge under one contract, when it differs from the default.
+export const contractChargeRules = pgTable(
+  "contract_charge_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    contractId: uuid("contract_id").notNull().references(() => contracts.id, { onDelete: "cascade" }),
+    chargeTypeId: uuid("charge_type_id").notNull().references(() => chargeTypes.id, { onDelete: "cascade" }),
+    billTo: billTo("bill_to").notNull(),
+  },
+  (t) => [uniqueIndex("contract_charge_rules_unique").on(t.contractId, t.chargeTypeId)],
+);
+
+// A company statement for one contract month. Frozen once issued.
+export const statements = pgTable(
+  "statements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    contractId: uuid("contract_id").notNull().references(() => contracts.id),
+    number: text("number").notNull().unique(),
+    rentMonth: integer("rent_month").notNull(),
+    periodStart: date("period_start").notNull(),
+    periodEnd: date("period_end").notNull(),
+    issuedOn: date("issued_on").notNull(),
+    dueDate: date("due_date").notNull(),
+    previousBalance: centavos("previous_balance").notNull(),
+    newCharges: centavos("new_charges").notNull(),
+    paymentsReceived: centavos("payments_received").notNull(),
+    balanceDue: centavos("balance_due").notNull(),
+    notes: text("notes"),
+    createdBy: uuid("created_by").references(() => staff.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("statements_contract_month").on(t.contractId, t.rentMonth)],
+);
+
+export const charges = pgTable(
+  "charges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    chargeTypeId: uuid("charge_type_id").notNull().references(() => chargeTypes.id),
+    billTo: billTo("bill_to").notNull(),
+    // The company account. Also kept on tenant charges for context.
+    contractId: uuid("contract_id").references(() => contracts.id),
+    // The tenant account, or for company charges the tenant it was for (itemized).
+    occupantId: uuid("occupant_id").references(() => occupants.id),
+    roomId: uuid("room_id").references(() => rooms.id, { onDelete: "set null" }),
+    description: text("description").notNull(),
+    amount: centavos("amount").notNull(),
+    chargedOn: date("charged_on").notNull(),
+    // Rent charges: the contract month they are for.
+    rentMonth: integer("rent_month"),
+    // Company charges: the statement they appear on (null = not billed yet).
+    statementId: uuid("statement_id").references(() => statements.id),
+    reversesId: uuid("reverses_id").references((): AnyPgColumn => charges.id),
+    createdBy: uuid("created_by").references(() => staff.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("charges_contract_idx").on(t.contractId),
+    index("charges_occupant_idx").on(t.occupantId),
+    uniqueIndex("charges_one_rent_per_month").on(t.contractId, t.rentMonth).where(sql`${t.rentMonth} IS NOT NULL AND ${t.reversesId} IS NULL`),
+    uniqueIndex("charges_reversed_once").on(t.reversesId).where(sql`${t.reversesId} IS NOT NULL`),
+  ],
+);
+
+export const paymentMethod = pgEnum("payment_method", ["cash", "bank_transfer", "gcash", "maya", "check", "other"]);
+
+export const payments = pgTable(
+  "payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    billTo: billTo("bill_to").notNull(),
+    contractId: uuid("contract_id").references(() => contracts.id),
+    occupantId: uuid("occupant_id").references(() => occupants.id),
+    amount: centavos("amount").notNull(),
+    method: paymentMethod("method").notNull(),
+    reference: text("reference"),
+    receivedOn: date("received_on").notNull(),
+    // Number of the official receipt from the hotel's own system, if one was issued.
+    officialReceiptNo: text("official_receipt_no"),
+    proofPhotoId: uuid("proof_photo_id").references(() => photos.id),
+    notes: text("notes"),
+    // Company payments: the statement that counted it (null = after the latest statement).
+    statementId: uuid("statement_id").references(() => statements.id),
+    reversesId: uuid("reverses_id").references((): AnyPgColumn => payments.id),
+    createdBy: uuid("created_by").references(() => staff.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("payments_contract_idx").on(t.contractId),
+    index("payments_occupant_idx").on(t.occupantId),
+    uniqueIndex("payments_reversed_once").on(t.reversesId).where(sql`${t.reversesId} IS NOT NULL`),
+  ],
+);
+
+// Security deposit held for a contract: received, then deductions and refunds at handover.
+export const depositEntryKind = pgEnum("deposit_entry_kind", ["received", "deduction", "refund"]);
+
+export const depositEntries = pgTable("deposit_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  contractId: uuid("contract_id").notNull().references(() => contracts.id),
+  kind: depositEntryKind("kind").notNull(),
+  amount: centavos("amount").notNull(),
+  entryOn: date("entry_on").notNull(),
+  description: text("description").notNull(),
+  roomItemId: uuid("room_item_id").references((): AnyPgColumn => roomItems.id, { onDelete: "set null" }),
+  checkId: uuid("check_id").references((): AnyPgColumn => inventoryChecks.id, { onDelete: "set null" }),
+  reversesId: uuid("reverses_id").references((): AnyPgColumn => depositEntries.id),
+  createdBy: uuid("created_by").references(() => staff.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("deposit_reversed_once").on(t.reversesId).where(sql`${t.reversesId} IS NOT NULL`)]);
+
+// Utilities: one bill for the whole contract each period, from the provider's
+// bill or a main-meter reading. Readings are stored in thousandths of a unit and
+// rates in ten-thousandths of a peso per unit, so nothing is rounded early.
+export const utilityMethod = pgEnum("utility_method", ["bill", "meter"]);
+
+export const utilityTypes = pgTable("utility_types", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  provider: text("provider"),
+  unit: text("unit"),
+  defaultMethod: utilityMethod("default_method").notNull().default("bill"),
+  rate: bigint("rate", { mode: "number" }),
+  active: boolean("active").notNull().default(true),
+  position: integer("position").notNull().default(0),
+});
+
+export const utilityBills = pgTable(
+  "utility_bills",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    utilityTypeId: uuid("utility_type_id").notNull().references(() => utilityTypes.id),
+    contractId: uuid("contract_id").notNull().references(() => contracts.id),
+    periodStart: date("period_start").notNull(),
+    periodEnd: date("period_end").notNull(),
+    dueDate: date("due_date"),
+    method: utilityMethod("method").notNull(),
+    previousReading: bigint("previous_reading", { mode: "number" }),
+    currentReading: bigint("current_reading", { mode: "number" }),
+    rate: bigint("rate", { mode: "number" }),
+    amount: centavos("amount").notNull(),
+    photoId: uuid("photo_id").references(() => photos.id),
+    notes: text("notes"),
+    chargeId: uuid("charge_id").references(() => charges.id),
+    createdBy: uuid("created_by").references(() => staff.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // One bill per utility, contract and period unless the earlier one was reversed (checked in code).
+  (t) => [index("utility_bills_contract_idx").on(t.contractId, t.utilityTypeId)],
+);
+
+// ---------------------------------------------------------------------------
+// Room inventory. Items belong to a room (or the storeroom when roomId is null).
+// Checks record what was found, item by item, so damage can be traced to a stay.
+
+export const itemCategory = pgEnum("item_category", ["furniture", "appliance", "fixture", "issued"]);
+export const itemCondition = pgEnum("item_condition", ["good", "fair", "damaged", "missing"]);
+
+// The standard list of items for a room type, used to set up rooms quickly.
+export const itemTemplates = pgTable("item_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  roomTypeId: uuid("room_type_id").notNull().references(() => roomTypes.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  category: itemCategory("category").notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  replacementCost: centavos("replacement_cost").notNull().default(0),
+  serviceEveryMonths: integer("service_every_months"),
+  position: integer("position").notNull().default(0),
+});
+
+export const roomItems = pgTable(
+  "room_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    roomId: uuid("room_id").references(() => rooms.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    category: itemCategory("category").notNull(),
+    quantity: integer("quantity").notNull().default(1),
+    brand: text("brand"),
+    model: text("model"),
+    serialNumber: text("serial_number"),
+    tagCode: text("tag_code").unique(),
+    purchaseDate: date("purchase_date"),
+    purchaseCost: centavos("purchase_cost"),
+    replacementCost: centavos("replacement_cost").notNull().default(0),
+    condition: itemCondition("condition").notNull().default("good"),
+    serviceEveryMonths: integer("service_every_months"),
+    lastServicedOn: date("last_serviced_on"),
+    photoId: uuid("photo_id").references(() => photos.id),
+    retiredOn: date("retired_on"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("room_items_room_idx").on(t.roomId)],
+);
+
+export const inventoryCheckKind = pgEnum("inventory_check_kind", ["contract_start", "move_in", "move_out", "spot", "handover"]);
+
+export const inventoryChecks = pgTable(
+  "inventory_checks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    roomId: uuid("room_id").notNull().references(() => rooms.id),
+    kind: inventoryCheckKind("kind").notNull(),
+    contractId: uuid("contract_id").references(() => contracts.id, { onDelete: "set null" }),
+    // Move-in and move-out checks: the stay they belong to.
+    assignmentId: uuid("assignment_id").references(() => roomAssignments.id, { onDelete: "set null" }),
+    checkedOn: date("checked_on").notNull(),
+    checkedBy: uuid("checked_by").references(() => staff.id, { onDelete: "set null" }),
+    // Who signed it off for the company or the tenant, as written on the sheet.
+    signedBy: text("signed_by"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("checks_room_idx").on(t.roomId)],
+);
+
+export const inventoryCheckLines = pgTable(
+  "inventory_check_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    checkId: uuid("check_id").notNull().references(() => inventoryChecks.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id").notNull().references(() => roomItems.id, { onDelete: "cascade" }),
+    // How many were found (the item's quantity is how many there should be).
+    found: integer("found").notNull(),
+    condition: itemCondition("condition").notNull(),
+    note: text("note"),
+    photoId: uuid("photo_id").references(() => photos.id),
+    // Set once the difference was charged to someone or deducted from the deposit.
+    chargeId: uuid("charge_id").references(() => charges.id),
+    depositEntryId: uuid("deposit_entry_id").references(() => depositEntries.id),
+  },
+  (t) => [uniqueIndex("check_lines_unique").on(t.checkId, t.itemId)],
+);
+
+export const itemEventKind = pgEnum("item_event_kind", ["added", "updated", "condition", "moved", "serviced", "retired"]);
+
+export const itemEvents = pgTable(
+  "item_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    itemId: uuid("item_id").notNull().references(() => roomItems.id, { onDelete: "cascade" }),
+    kind: itemEventKind("kind").notNull(),
+    fromRoomId: uuid("from_room_id").references(() => rooms.id, { onDelete: "set null" }),
+    toRoomId: uuid("to_room_id").references(() => rooms.id, { onDelete: "set null" }),
+    condition: itemCondition("condition"),
+    note: text("note"),
+    checkId: uuid("check_id").references(() => inventoryChecks.id, { onDelete: "set null" }),
+    staffId: uuid("staff_id").references(() => staff.id, { onDelete: "set null" }),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("item_events_item_idx").on(t.itemId)],
+);
+
 export type Staff = typeof staff.$inferSelect;
 export type StaffRole = (typeof staffRole.enumValues)[number];
 export type Room = typeof rooms.$inferSelect;
@@ -332,3 +618,18 @@ export type HouseRule = typeof houseRules.$inferSelect;
 export type ScheduleEntry = typeof weeklySchedule.$inferSelect;
 export type MaintenanceVisit = typeof maintenanceVisits.$inferSelect;
 export type TenantRequest = typeof tenantRequests.$inferSelect;
+export type ChargeType = typeof chargeTypes.$inferSelect;
+export type Charge = typeof charges.$inferSelect;
+export type Payment = typeof payments.$inferSelect;
+export type Statement = typeof statements.$inferSelect;
+export type DepositEntry = typeof depositEntries.$inferSelect;
+export type UtilityType = typeof utilityTypes.$inferSelect;
+export type UtilityBill = typeof utilityBills.$inferSelect;
+export type ItemTemplate = typeof itemTemplates.$inferSelect;
+export type RoomItem = typeof roomItems.$inferSelect;
+export type InventoryCheck = typeof inventoryChecks.$inferSelect;
+export type InventoryCheckLine = typeof inventoryCheckLines.$inferSelect;
+export type ItemCondition = (typeof itemCondition.enumValues)[number];
+export type ItemCategory = (typeof itemCategory.enumValues)[number];
+export type InventoryCheckKind = (typeof inventoryCheckKind.enumValues)[number];
+export type PaymentMethod = (typeof paymentMethod.enumValues)[number];

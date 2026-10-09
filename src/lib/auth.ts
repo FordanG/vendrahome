@@ -135,4 +135,12 @@ export const CAN = {
   manageVisits: ["admin", "front_desk", "maintenance"] as StaffRole[],
   manageSchedules: ["admin", "front_desk"] as StaffRole[],
   manageHouseRules: ["admin"] as StaffRole[],
+  // Billing: front desk sees accounts, takes payments and adds charges; the admin
+  // issues statements, enters utility bills and makes corrections.
+  viewBilling: ["admin", "front_desk"] as StaffRole[],
+  recordBilling: ["admin", "front_desk"] as StaffRole[],
+  manageBilling: ["admin"] as StaffRole[],
+  // Inventory: everyone who works on rooms checks items; the office adds, moves and retires them.
+  viewInventory: ["admin", "front_desk", "maintenance"] as StaffRole[],
+  manageInventory: ["admin", "front_desk"] as StaffRole[],
 };

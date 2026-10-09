@@ -79,6 +79,11 @@ export default async function OccupantPage({ params }: PageProps<"/occupants/[id
             )}
             {occupant.employeeId && <span>Employee ID {occupant.employeeId}</span>}
             {occupant.position && <span>{occupant.position}</span>}
+            {CAN.viewBilling.includes(user.role) && (
+              <Link className="underline" href={`/billing/tenants/${occupant.id}`}>
+                Charges and payments
+              </Link>
+            )}
           </span>
         }
       />

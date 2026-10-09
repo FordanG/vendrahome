@@ -37,7 +37,7 @@ ADMIN_PASSWORD=choose-one pnpm db:seed   # admin account and the 75 rooms
 pnpm db:demo                             # demo data and the accounts below
 ```
 
-`pnpm db:demo` adds one company that leases every room on a two-year contract, 2 to 3 tenants in each room, room types (Twin, Triple, Loft), house rules, kitchen and laundry times, maintenance visits and tenant requests. `pnpm db:demo:remove` takes out everything it added and leaves the rest alone.
+`pnpm db:demo` adds one company that leases every room on a two-year contract, 2 to 3 tenants in each room, room types (Twin, Triple, Loft), house rules, kitchen and laundry times, maintenance visits and tenant requests. It also adds billing (the deposit, two issued statements with the second partly unpaid and overdue, utility bills, tenant laundry charges) and a room inventory (a standard list per room type, items in every room, contract-start checks, and a move-out check with a missing key card). On a database where an older demo is already loaded, `pnpm db:demo` adds just the billing and inventory part. `pnpm db:demo:remove` takes out everything it added and leaves the rest alone.
 
 | Sign in as | Role | Password |
 |---|---|---|
@@ -66,7 +66,7 @@ It starts its own server on port 3456 with a fresh database in `.data/e2e` and b
 ## Layout
 
 - `src/db/schema.ts` — all tables. Money is stored in centavos.
-- `src/lib/` — auth and roles (`auth.ts`), rent schedule math (`rent.ts`), room status (`rooms.ts`), room availability checks (`assignments.ts`), occupant fields (`occupants.ts`), CSV import helpers (`csv.ts`).
+- `src/lib/` — billing balances, statements and overdue (`billing.ts`), room inventory and check comparisons (`inventory.ts`), private photo storage (`photos.ts`), auth and roles (`auth.ts`), rent schedule math (`rent.ts`), room status (`rooms.ts`), room availability checks (`assignments.ts`), occupant fields (`occupants.ts`), CSV import helpers (`csv.ts`).
 - `src/app/(app)/` — signed-in pages. Each area has an `actions.ts` with its server actions; every action checks the staff role.
 - `src/app/me/` — the tenant portal. Tenant pages call `requireTenant()`; staff pages call `requireStaff()`, which sends tenants back to `/me`.
 - `src/proxy.ts` — sends signed-out visitors to `/login`.
@@ -81,9 +81,12 @@ It starts its own server on port 3456 with a fresh database in `.data/e2e` and b
 - Occupants with full details, room assignments with bed/slot, transfers, check-outs and history
 - Assignment board, and CSV import of the client's list of people and rooms
 - Audit log of every change
-- Tenant portal: occupant logins; their room, maintenance visits, kitchen and laundry timetable, house rules; problem reports and maintenance or laundry requests that staff approve
+- Tenant portal: occupant logins; their room, maintenance visits, kitchen and laundry timetable, house rules; problem reports and maintenance or laundry requests that staff approve; their own charges and balance
+- Billing (`/billing`): a ledger of charges and payments for each company contract and each tenant; monthly statements of account, frozen once issued and printable; charge types and who pays each, per contract; payments with method, reference, official receipt number and a photo of the proof; deposit received, deducted and refunded; overdue list; corrections only by reversing entries
+- Utilities (`/billing/utilities`): one bill a period for the whole contract, from the provider's bill or a main-meter reading × rate, with a photo; flags bills far above the usual and rejects readings lower than the last
+- Room inventory (`/inventory`): items per room with condition, tag, serial number, replacement cost and service cycle; a standard list per room type added to every room in one step; contract-start, move-in, move-out, spot and handover checks; differences become damage charges or deposit deductions; a damaged item can book a repair visit; storeroom, moves, retirements and item history
 
-Next: billing records and utilities, laundry, housekeeping and maintenance, room inventory, QR codes, feedback.
+Next: laundry loads and run sheets, housekeeping schedules and checklists, room QR codes, feedback. Moving to Supabase for shared hosting.
 
 
 ## Account profiles

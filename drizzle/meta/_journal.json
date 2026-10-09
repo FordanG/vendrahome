@@ -57,6 +57,13 @@
       "when": 1790993680930,
       "tag": "0007_wide_titania",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791202096000,
+      "tag": "0008_normal_dagger",
+      "breakpoints": true
     }
   ]
 }

@@ -92,6 +92,11 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
             <span>
               {contractRooms.length} rooms, {formatDate(contract.startDate)} to {formatDate(contract.endDate)}
             </span>
+            {contract.status !== "draft" && CAN.viewBilling.includes(user.role) && (
+              <Link className="underline" href={`/billing/contracts/${contract.id}`}>
+                Statements and payments
+              </Link>
+            )}
           </span>
         }
       />

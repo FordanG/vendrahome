@@ -45,6 +45,29 @@ export function rentForMonth(base: number, steps: Step[], month: number): number
   return rent;
 }
 
+/** First and last day of contract month `month` (the last month ends on the contract end date). */
+export function contractMonthPeriod(startDate: string, endDate: string, month: number): { start: string; end: string } {
+  const start = addMonthsISO(startDate, month - 1);
+  const lastDay = dayBefore(addMonthsISO(startDate, month));
+  return { start, end: endDate < lastDay ? endDate : lastDay };
+}
+
+/** Rent charged for one contract month: the monthly rent, prorated by days in a partial final month when the contract says so. */
+export function rentChargeForMonth(
+  base: number,
+  steps: Step[],
+  startDate: string,
+  endDate: string,
+  partialMonthPolicy: "full" | "prorated",
+  month: number,
+): number {
+  const monthly = rentForMonth(base, steps, month);
+  if (partialMonthPolicy !== "prorated") return monthly;
+  const { start, end } = contractMonthPeriod(startDate, endDate, month);
+  const nextStart = addMonthsISO(startDate, month);
+  return Math.round(monthly * ((daysBetween(start, end) + 1) / daysBetween(start, nextStart)));
+}
+
 /** Collapses the contract into periods where the monthly rent is the same. */
 export function rentSchedule(
   base: number,
@@ -58,12 +81,7 @@ export function rentSchedule(
   const stepAt = new Map(steps.map((s) => [s.startMonth, s]));
   for (let m = 1; m <= total; m++) {
     const monthly = rentForMonth(base, steps, m);
-    const monthStart = addMonthsISO(startDate, m - 1);
-    const nextStart = addMonthsISO(startDate, m);
-    const actualEnd = endDate < dayBefore(nextStart) ? endDate : dayBefore(nextStart);
-    const totalAmount = partialMonthPolicy === "prorated"
-      ? Math.round(monthly * ((daysBetween(monthStart, actualEnd) + 1) / daysBetween(monthStart, nextStart)))
-      : monthly;
+    const totalAmount = rentChargeForMonth(base, steps, startDate, endDate, partialMonthPolicy, m);
     const last = periods.at(-1);
     if (last && last.monthly === monthly && !stepAt.has(m)) {
       last.toMonth = m;

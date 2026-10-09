@@ -1,6 +1,6 @@
 # Operating rules and rollout
 
-These corrections address the 3 October 2026 platform review. They do not add the deferred billing, inventory, full laundry, housekeeping or QR modules.
+These corrections address the 3 October 2026 platform review. Billing and room inventory were added afterwards (see their sections below); full laundry, housekeeping and QR modules are still to come.
 
 ## Rooms and stays
 
@@ -73,3 +73,20 @@ Check room, occupant and assignment counts and representative records before sel
 - `pnpm typecheck` and `pnpm lint` check source correctness.
 - `pnpm test:e2e` uses a separate database and a contract-backed fixture. Its startup uses Node's TSX loader to avoid the TSX CLI's IPC requirement.
 - In the agent's restricted environment, browser tests could not bind port 3456. Production build was blocked fetching the pre-existing Google Fonts. Run those checks on the normal development/deployment host before release; a browser pass or production build pass is not claimed here.
+
+## Billing
+
+- Front desk and admin record payments and add charges. Only the admin issues statements, enters utility bills, gives credits, makes corrections and manages the deposit, charge types and charge rules. Maintenance has no billing access.
+- Every amount owed is a charge and every amount received is a payment, on either a company account (through its contract) or a tenant's own account. A charge or payment is never edited or deleted once saved; a mistake is undone with a reversing entry that keeps the original and records why.
+- A statement covers one contract month (the same anniversary months as the rent schedule). Issuing it adds that month's rent and takes in every company charge and payment not on a statement yet, dated up to the issue date. Statements issue in order, at most a month before their month starts, and are frozen once issued; anything added later, including corrections, goes on the next one.
+- Rent and utilities are always billed to the company. For every other charge type, the contract's charge rule decides who pays, falling back to the type's default. A charge can move between the company and the tenant only until it is on a statement.
+- Overdue: payments clear the oldest statements first; whatever is still owed on statements past their due date is overdue, counted from the oldest.
+- Utility readings are stored in thousandths of a unit and rates in ten-thousandths of a peso, so the amount is rounded to centavos only once. One bill per utility, contract and period; a reversed bill frees its period for re-entry.
+- Statements are titled "Statement of account" and say they are not official receipts. Official receipt numbers from the hotel's own system can be recorded on each payment. VAT and withholding are not handled yet.
+
+## Room inventory
+
+- Everyone who works on rooms can check items, update an item's condition, book a repair visit for it and record a service. Front desk and admin add, edit, move and retire items. Only the admin edits the standard lists per room type.
+- A check records what was found for every item in the room and updates each item's condition. A move-out check is compared with the same stay's move-in check (or the last check before the move-in); a handover check with the contract-start check; any other check with the room's previous one.
+- What got worse (fewer found, or a worse condition) can be charged once, at the suggested replacement cost or an amount staff set, to the company or tenant by the contract's damage rule. At handover the admin can deduct it from the deposit instead, up to the amount held.
+- Retired items keep their history. Photos of items, bills and payment proofs are private: re-encoded without camera or location data and shown only to roles that can see the record.

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireTenant } from "@/lib/auth";
-import { formatDate, formatTimeRange, todayISO } from "@/lib/format";
+import { formatDate, formatPeso, formatTimeRange, todayISO } from "@/lib/format";
+import { occupantAccount } from "@/lib/billing";
 import {
   appliesToRoom,
   getCurrentStay,
@@ -18,7 +19,7 @@ export default async function TenantHomePage() {
   const { user, occupant } = await requireTenant();
   const today = todayISO();
   const db = await getDb();
-  const [stay, schedule, requests] = await Promise.all([
+  const [stay, schedule, requests, account] = await Promise.all([
     getCurrentStay(occupant.id),
     getSchedule(),
     db
@@ -32,6 +33,7 @@ export default async function TenantHomePage() {
       )
       .orderBy(desc(schema.tenantRequests.createdAt))
       .limit(5),
+    occupantAccount(occupant.id),
   ]);
   const visits = stay
     ? await db
@@ -152,6 +154,30 @@ export default async function TenantHomePage() {
             </ul>
           )}
         </Card>
+
+        {/* Only charges the tenant pays personally (e.g. laundry); company-paid ones never show here. */}
+        {(account.charges.length > 0 || account.payments.length > 0) && (
+          <Card>
+            <SectionTitle>Your charges</SectionTitle>
+            <p className="mb-3 text-sm">
+              {account.balance > 0 ? <>You owe <strong>{formatPeso(account.balance)}</strong>. Pay at the front desk.</>
+                : account.balance < 0 ? <>You paid {formatPeso(-account.balance)} ahead.</>
+                : "You're all paid up."}
+            </p>
+            <ul className="divide-y divide-border text-sm">
+              {[...account.charges.map((c) => ({ id: c.charge.id, date: c.charge.chargedOn, what: c.charge.description, amount: c.charge.amount })),
+                ...account.payments.map((p) => ({ id: p.payment.id, date: p.payment.receivedOn, what: p.payment.reversesId ? "Payment reversed" : "Payment received", amount: -p.payment.amount }))]
+                .sort((a, b) => (a.date < b.date ? 1 : -1))
+                .slice(0, 8)
+                .map((row) => (
+                  <li key={row.id} className="flex justify-between gap-3 py-2">
+                    <span>{row.what}<span className="block text-xs text-muted">{formatDate(row.date)}</span></span>
+                    <span className="tabular-nums">{row.amount < 0 ? `−${formatPeso(-row.amount)}` : formatPeso(row.amount)}</span>
+                  </li>
+                ))}
+            </ul>
+          </Card>
+        )}
       </div>
     </>
   );

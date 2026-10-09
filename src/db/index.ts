@@ -45,7 +45,8 @@ export async function withTransaction<T>(work: () => Promise<T>): Promise<T> {
   const db = await rootDb();
   return db.transaction(async (tx) => {
     await tx.execute(sql`LOCK TABLE rooms, occupants, room_assignments, contracts,
-      contract_rooms, rent_steps, tenant_requests, maintenance_visits, staff, sessions
+      contract_rooms, rent_steps, tenant_requests, maintenance_visits, staff, sessions,
+      charges, payments, statements, deposit_entries, utility_bills, room_items, inventory_checks
       IN SHARE ROW EXCLUSIVE MODE`);
     return transactionStore.run(tx, work);
   });
