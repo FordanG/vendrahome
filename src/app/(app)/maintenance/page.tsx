@@ -1,8 +1,8 @@
-import { and, asc, desc, eq, gte, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, ne } from "drizzle-orm";
 import { visitPermission } from "@/lib/service-work";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
-import { addDaysISO, formatDate, formatTimeRange, todayISO } from "@/lib/format";
+import { addDaysISO, formatDate, formatMoment, formatTimeRange, todayISO } from "@/lib/format";
 import { VISIT_STATUS_LABELS, VISIT_STATUS_TONES } from "@/lib/portal";
 import { ActionForm } from "@/components/action-form";
 import { TargetSelect } from "@/components/target-select";
@@ -11,6 +11,14 @@ import type { MaintenanceVisit } from "@/db/schema";
 import { scheduleVisits, updateVisit, updateVisitBatch } from "./actions";
 
 type Row = { v: MaintenanceVisit; roomNumber: string; floor: number };
+type CheckIn = { at: Date; name: string };
+
+/** "Checked in 10:42 AM by Ana", or a warning when a visit was closed as done without anyone checking in. */
+function CheckInNote({ v, checkIn }: { v: MaintenanceVisit; checkIn?: CheckIn }) {
+  if (checkIn) return <span className="text-emerald-700 dark:text-emerald-400">Checked in {formatMoment(checkIn.at)} by {checkIn.name}</span>;
+  if (v.status === "done") return <span className="text-attention">Done without a door-code check-in</span>;
+  return null;
+}
 
 const weekday = new Intl.DateTimeFormat("en-PH", { weekday: "long", timeZone: "UTC" });
 
@@ -63,7 +71,7 @@ function VisitForm({ v, staff, canAssign }: { v: MaintenanceVisit; staff: { id: 
   );
 }
 
-function VisitSummary({ v, rooms, count }: { v: MaintenanceVisit; rooms: string; count?: number }) {
+function VisitSummary({ v, rooms, count, checkIn }: { v: MaintenanceVisit; rooms: string; count?: number; checkIn?: CheckIn }) {
   const time = formatTimeRange(v.timeFrom, v.timeTo);
   return (
     // Phones: what and where on top, then when, then the status; one line each.
@@ -75,6 +83,7 @@ function VisitSummary({ v, rooms, count }: { v: MaintenanceVisit; rooms: string;
       <span className="mt-0.5 flex flex-wrap gap-x-3 text-muted sm:order-3 sm:mt-0 sm:contents">
         {time && <span className="sm:order-4">{time}</span>}
         {count && count > 1 && <span className="sm:order-3">{count} rooms, open to see each</span>}
+        {!count && <span className="sm:order-4"><CheckInNote v={v} checkIn={checkIn} /></span>}
       </span>
       <span className="mt-2 flex gap-2 sm:order-5 sm:ml-auto sm:mt-0">
         {v.requestId && <Badge>Asked by tenant</Badge>}
@@ -117,6 +126,17 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
   ]);
   const permissions = await Promise.all(allVisits.map(({v}) => visitPermission(user, v)));
   const visits = allVisits.filter((_, i) => !permissions[i]);
+  const checkIns = new Map<string, CheckIn>();
+  if (visits.length > 0) {
+    const rows = await db
+      .select({ visitId: schema.roomCheckIns.visitId, at: schema.roomCheckIns.at, name: schema.staff.name })
+      .from(schema.roomCheckIns)
+      .innerJoin(schema.staff, eq(schema.roomCheckIns.staffId, schema.staff.id))
+      .where(inArray(schema.roomCheckIns.visitId, visits.map((x) => x.v.id)))
+      .orderBy(asc(schema.roomCheckIns.at));
+    // The first check-in is when someone arrived.
+    for (const r of rows) if (r.visitId && !checkIns.has(r.visitId)) checkIns.set(r.visitId, { at: r.at, name: r.name });
+  }
   const roomsPerFloor = new Map<number, number>();
   for (const r of rooms) roomsPerFloor.set(r.floor, (roomsPerFloor.get(r.floor) ?? 0) + 1);
 
@@ -168,7 +188,7 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
                     if (g.length === 1) {
                       return (
                         <details key={first.id}>
-                          <VisitSummary v={first} rooms={`Room ${g[0].roomNumber}`} />
+                          <VisitSummary v={first} rooms={`Room ${g[0].roomNumber}`} checkIn={checkIns.get(first.id)} />
                           <div className="border-t border-border bg-background/40 px-4 py-3">
                             {first.notes && <p className="mb-3 whitespace-pre-wrap text-sm text-muted">{first.notes}</p>}
                             {canManage ? <VisitForm v={first} staff={staff} canAssign={user.role !== "maintenance"} /> : !first.notes && <p className="text-sm text-muted">No notes.</p>}
@@ -208,7 +228,10 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
                                 <details key={v.id}>
                                   <summary className="flex cursor-pointer select-none items-center justify-between px-3 py-2 text-sm hover:bg-background/60">
                                     <span className="plate font-bold">Room {roomNumber}</span>
-                                    <Badge tone={VISIT_STATUS_TONES[v.status]}>{VISIT_STATUS_LABELS[v.status]}</Badge>
+                                    <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs">
+                                      <CheckInNote v={v} checkIn={checkIns.get(v.id)} />
+                                      <Badge tone={VISIT_STATUS_TONES[v.status]}>{VISIT_STATUS_LABELS[v.status]}</Badge>
+                                    </span>
                                   </summary>
                                   {canManage && (
                                     <div className="border-t border-border px-3 py-3">

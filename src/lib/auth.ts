@@ -135,6 +135,9 @@ export const CAN = {
   manageVisits: ["admin", "front_desk", "maintenance"] as StaffRole[],
   manageSchedules: ["admin", "front_desk"] as StaffRole[],
   manageHouseRules: ["admin"] as StaffRole[],
+  // Door QR codes: the office prints them; anyone who works on rooms checks in with one.
+  printDoorCodes: ["admin", "front_desk"] as StaffRole[],
+  checkInAtRooms: ["admin", "front_desk", "maintenance"] as StaffRole[],
   // Billing: front desk sees accounts, takes payments and adds charges; the admin
   // issues statements, enters utility bills and makes corrections.
   viewBilling: ["admin", "front_desk"] as StaffRole[],

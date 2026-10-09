@@ -1,6 +1,6 @@
 # Operating rules and rollout
 
-These corrections address the 3 October 2026 platform review. Billing and room inventory were added afterwards (see their sections below); full laundry, housekeeping and QR modules are still to come.
+These corrections address the 3 October 2026 platform review. Billing and room inventory were added afterwards (see their sections below); door codes were added after that; full laundry and housekeeping modules are still to come.
 
 ## Rooms and stays
 
@@ -90,3 +90,10 @@ Check room, occupant and assignment counts and representative records before sel
 - A check records what was found for every item in the room and updates each item's condition. A move-out check is compared with the same stay's move-in check (or the last check before the move-in); a handover check with the contract-start check; any other check with the room's previous one.
 - What got worse (fewer found, or a worse condition) can be charged once, at the suggested replacement cost or an amount staff set, to the company or tenant by the contract's damage rule. At handover the admin can deduct it from the deposit instead, up to the amount held.
 - Retired items keep their history. Photos of items, bills and payment proofs are private: re-encoded without camera or location data and shown only to roles that can see the record.
+
+## Door codes
+
+- Each room has one code. Admin and front desk can print it; only the admin can replace it, which stops the printed one working.
+- Scanning needs a signed-in account. Tenants go to their requests page; staff see the room and check in.
+- A check-in records who was at the door and when, linked to a visit when one is picked. A printed code can be photographed, so a check-in shows presence; it does not prove it. Visits marked done without a check-in are flagged on the maintenance page.
+- Scanning again within 10 minutes for the same visit doesn't add another check-in.

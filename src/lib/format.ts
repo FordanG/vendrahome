@@ -74,6 +74,16 @@ export function formatTime(hhmm: string | null | undefined): string {
   return `${h % 12 || 12}:${m[2]} ${h < 12 ? "AM" : "PM"}`;
 }
 
+const manilaClock = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", hour: "numeric", minute: "2-digit" });
+const manilaDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" });
+
+/** A moment as Manila time: "10:42 AM" today, "Oct 8, 2026, 10:42 AM" on another day. */
+export function formatMoment(at: Date): string {
+  const day = manilaDay.format(at);
+  const time = manilaClock.format(at);
+  return day === todayISO() ? time : `${formatDate(day)}, ${time}`;
+}
+
 export function formatTimeRange(from: string | null | undefined, to: string | null | undefined): string {
   if (from && to) return `${formatTime(from)} – ${formatTime(to)}`;
   if (from) return `from ${formatTime(from)}`;

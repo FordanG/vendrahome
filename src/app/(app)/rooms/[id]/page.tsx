@@ -11,7 +11,8 @@ import { StayCell } from "@/components/stay";
 import { REQUEST_KIND_LABELS, REQUEST_STATUS_TONES, requestStatusLabel } from "@/lib/portal";
 import { ActionForm } from "@/components/action-form";
 import { Badge, Card, Detail, Empty, Field, Input, PageHeader, SectionTitle, Select, Table, Td, Th } from "@/components/ui";
-import { deleteRoom, setPeopleAllowed, setRoomCondition, updateRoom } from "../actions";
+import { deleteRoom, replaceDoorCode, setPeopleAllowed, setRoomCondition, updateRoom } from "../actions";
+import { qrSvg, roomScanUrl } from "@/lib/room-qr";
 import { RoomFields } from "../room-fields";
 
 export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
@@ -41,6 +42,9 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
   const live = board.find((r) => r.id === id)!;
   const canManage = CAN.manageRooms.includes(user.role);
   const canSeePeople = CAN.manageOccupants.includes(user.role);
+  const canPrintCode = CAN.printDoorCodes.includes(user.role);
+  const scanUrl = canPrintCode ? await roomScanUrl(room.qrToken) : null;
+  const doorCode = scanUrl ? await qrSvg(scanUrl) : null;
 
   return (
     <>
@@ -216,6 +220,39 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
               </Field>
             </ActionForm>
           </Card>
+
+          {doorCode && (
+            <Card>
+              <SectionTitle
+                actions={
+                  <Link className="text-sm text-muted underline underline-offset-2" href={`/rooms/door-codes?room=${room.id}`}>
+                    Print
+                  </Link>
+                }
+              >
+                Door code
+              </SectionTitle>
+              <div className="mx-auto w-40 bg-white p-1" dangerouslySetInnerHTML={{ __html: doorCode }} />
+              <p className="mt-3 text-xs text-muted">
+                Tenants scan it to ask for help. Staff scan it to check in at the room. Its address is{" "}
+                <a className="break-all underline" href={scanUrl!}>{scanUrl}</a>
+              </p>
+              {canManage && (
+                <div className="mt-4 border-t border-border pt-4">
+                  <ActionForm
+                    action={async () => {
+                      "use server";
+                      return replaceDoorCode(room.id);
+                    }}
+                    submitLabel="Make a new code"
+                    submitVariant="secondary"
+                    confirm={`Make a new code for room ${room.number}? The code on the door stops working until you replace it.`}
+                  />
+                  <p className="mt-2 text-xs text-muted">Use this if the printed code was copied or shared.</p>
+                </div>
+              )}
+            </Card>
+          )}
 
           {canManage && (
             <Card>

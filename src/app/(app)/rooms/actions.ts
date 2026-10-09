@@ -2,13 +2,13 @@
 
 import { mutate } from "@/lib/mutations";
 
-import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { str } from "@/lib/format";
+import { newRoomToken } from "@/lib/room-qr";
 import type { ActionState } from "@/lib/action-state";
 
 const CONDITIONS = ["ready", "needs_work", "not_available"] as const;
@@ -76,7 +76,7 @@ export async function createRoom(_: ActionState, fd: FormData): Promise<ActionSt
     if (clash) return { error: `Room ${parsed.value.number} already exists.` };
     const [room] = await db
       .insert(schema.rooms)
-      .values({ ...parsed.value, qrToken: randomBytes(12).toString("base64url") })
+      .values({ ...parsed.value, qrToken: newRoomToken() })
       .returning();
     await audit(user.id, "create", "room", room.id, { number: room.number });
     revalidatePath("/rooms");
@@ -171,6 +171,19 @@ export async function setRoomCondition(id: string, _: ActionState, fd: FormData)
     revalidatePath(`/rooms/${id}`);
     revalidatePath("/");
     return { ok: "Condition updated." };
+  });
+}
+
+/** Replaces a room's door code. The old printed code stops working. */
+export async function replaceDoorCode(id: string): Promise<ActionState> {
+  return mutate(async () => {
+    const user = await requireStaff(CAN.manageRooms);
+    const db = await getDb();
+    const [room] = await db.update(schema.rooms).set({ qrToken: newRoomToken() }).where(eq(schema.rooms.id, id)).returning();
+    if (!room) return { error: "Room not found." };
+    await audit(user.id, "replace_door_code", "room", id, { number: room.number });
+    revalidatePath(`/rooms/${id}`);
+    return { ok: "New code made. Print it and replace the one on the door; the old one no longer works." };
   });
 }
 

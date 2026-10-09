@@ -7,7 +7,7 @@ import { STATUS_LABELS, STATUS_TONES } from "@/lib/room-status";
 import { bedsTaken, todayISO } from "@/lib/format";
 import { FloorJump, Row, RowLine, RowList, RoomPlate } from "@/components/list";
 import { ActionForm } from "@/components/action-form";
-import { Badge, Card, Field, Input, PageHeader, SectionTitle, Select, Table, Td, Th } from "@/components/ui";
+import { Badge, Card, Field, Input, LinkButton, PageHeader, SectionTitle, Select, Table, Td, Th } from "@/components/ui";
 import { createRoom, saveRoomType, setPeopleAllowedMany } from "./actions";
 import { RoomFields } from "./room-fields";
 
@@ -25,7 +25,17 @@ export default async function RoomsPage() {
 
   return (
     <>
-      <PageHeader title="Rooms" subtitle={`${rooms.length} rooms. Open a room to see who lives there and change its details.`} />
+      <PageHeader
+        title="Rooms"
+        subtitle={`${rooms.length} rooms. Open a room to see who lives there and change its details.`}
+        actions={
+          CAN.printDoorCodes.includes(user.role) && (
+            <LinkButton variant="secondary" href="/rooms/door-codes">
+              Print door codes
+            </LinkButton>
+          )
+        }
+      />
 
       <FloorJump floors={floors} />
       <div className="space-y-5 sm:hidden">

@@ -35,6 +35,8 @@ const occupancy = require('../src/app/(app)/occupants/actions.ts');
 const contracts = require('../src/app/(app)/contracts/actions.ts');
 const requests = require('../src/app/(app)/requests/actions.ts');
 const visits = require('../src/app/(app)/maintenance/actions.ts');
+const doorCode = require('../src/app/r/[token]/actions.ts');
+const roomActions = require('../src/app/(app)/rooms/actions.ts');
 const { importOccupants } = require('../src/app/(app)/assignments/import/actions.ts');
 const { cancelRequest, createRequest } = require('../src/app/me/actions.ts');
 const { changeOwnPassword } = require('../src/app/(app)/staff/actions.ts');
@@ -321,4 +323,28 @@ test('every role can save, replace, read and remove only its own profile photo',
       assert.equal((await GET()).status,404);
     });
   }
+});
+test('door-code check-ins: right room, own visits, no duplicates, replaced codes stop working', async () => {
+  const r=await room(); const other=await room();
+  const [visit,elsewhere,theirs]=await db.insert(schema.maintenanceVisits).values([
+    {roomId:r.id,title:'Aircon cleaning',date:today,createdBy:admin.id},
+    {roomId:other.id,title:'Other room',date:today,createdBy:admin.id},
+    {roomId:r.id,title:'Assigned to someone else',date:today,assigneeId:otherFix.id,createdBy:admin.id},
+  ]).returning();
+  const checkIn=(actor,token,visitId)=>actors.run(actor,()=>doorCode.checkIn(token,{},fd({visitId:visitId??''})));
+  const count=async()=>(await db.query.roomCheckIns.findMany({where:eq(schema.roomCheckIns.roomId,r.id)})).length;
+  assert.ok((await checkIn(fix,r.qrToken,elsewhere.id)).error);
+  assert.ok((await checkIn(fix,r.qrToken,theirs.id)).error);
+  assert.equal(await count(),0);
+  assert.ok((await checkIn(fix,r.qrToken,visit.id)).ok);
+  assert.ok((await checkIn(fix,r.qrToken,visit.id)).ok);
+  assert.equal(await count(),1);
+  assert.ok((await checkIn(fix,r.qrToken)).ok);
+  assert.equal(await count(),2);
+  assert.ok((await actors.run(otherFix,()=>doorCode.finishVisit(r.qrToken,visit.id))).ok);
+  assert.ok((await actors.run(fix,()=>doorCode.finishVisit(r.qrToken,theirs.id))).error);
+  assert.equal((await db.query.maintenanceVisits.findFirst({where:eq(schema.maintenanceVisits.id,visit.id)})).status,'done');
+  assert.ok((await run(roomActions.replaceDoorCode,r.id)).ok);
+  assert.ok((await checkIn(fix,r.qrToken)).error);
+  await assert.rejects(()=>actors.run(fix,()=>roomActions.replaceDoorCode(r.id)));
 });

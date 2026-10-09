@@ -86,7 +86,9 @@ It starts its own server on port 3456 with a fresh database in `.data/e2e` and b
 - Utilities (`/billing/utilities`): one bill a period for the whole contract, from the provider's bill or a main-meter reading × rate, with a photo; flags bills far above the usual and rejects readings lower than the last
 - Room inventory (`/inventory`): items per room with condition, tag, serial number, replacement cost and service cycle; a standard list per room type added to every room in one step; contract-start, move-in, move-out, spot and handover checks; differences become damage charges or deposit deductions; a damaged item can book a repair visit; storeroom, moves, retirements and item history
 
-Next: laundry loads and run sheets, housekeeping schedules and checklists, room QR codes, feedback. Moving to Supabase for shared hosting.
+- Door codes: a QR code for each room, printable one at a time or as a sheet (`/rooms/door-codes`). Tenants who scan go to their requests; staff sign in if needed, check in at the room, and can mark the visit done. The maintenance page shows who checked in and when, and flags visits marked done without a check-in. The admin can replace a room's code. Set `APP_URL` to the public address so printed codes point there.
+
+Next: laundry loads and run sheets, housekeeping schedules and checklists, feedback. Moving to Supabase for shared hosting.
 
 
 ## Account profiles

@@ -286,6 +286,24 @@ export const maintenanceVisits = pgTable(
   (t) => [index("visits_date_idx").on(t.date), index("visits_room_idx").on(t.roomId)],
 );
 
+// A staff member scanning a room's door code and confirming they are there.
+// A printed code can be photographed, so this records presence, not proof of it.
+export const roomCheckIns = pgTable(
+  "room_check_ins",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    roomId: uuid("room_id")
+      .notNull()
+      .references(() => rooms.id, { onDelete: "cascade" }),
+    staffId: uuid("staff_id")
+      .notNull()
+      .references(() => staff.id, { onDelete: "cascade" }),
+    visitId: uuid("visit_id").references(() => maintenanceVisits.id, { onDelete: "set null" }),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("check_ins_room_idx").on(t.roomId, t.at), index("check_ins_visit_idx").on(t.visitId)],
+);
+
 // issue: something wrong in the unit. maintenance and laundry: asking for a
 // time outside the regular schedule, which staff approve or decline.
 export const requestKind = pgEnum("request_kind", ["issue", "maintenance", "laundry"]);
@@ -617,6 +635,7 @@ export type RoomAssignment = typeof roomAssignments.$inferSelect;
 export type HouseRule = typeof houseRules.$inferSelect;
 export type ScheduleEntry = typeof weeklySchedule.$inferSelect;
 export type MaintenanceVisit = typeof maintenanceVisits.$inferSelect;
+export type RoomCheckIn = typeof roomCheckIns.$inferSelect;
 export type TenantRequest = typeof tenantRequests.$inferSelect;
 export type ChargeType = typeof chargeTypes.$inferSelect;
 export type Charge = typeof charges.$inferSelect;

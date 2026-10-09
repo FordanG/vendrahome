@@ -64,6 +64,13 @@
       "when": 1791202096000,
       "tag": "0008_normal_dagger",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791538607674,
+      "tag": "0009_loud_clea",
+      "breakpoints": true
     }
   ]
 }
