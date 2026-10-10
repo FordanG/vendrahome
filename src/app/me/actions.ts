@@ -10,6 +10,7 @@ import { requireTenant, signOut } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { isISODate, str, todayISO } from "@/lib/format";
 import { getCurrentStay } from "@/lib/portal";
+import { createClaim } from "@/lib/laundry";
 import type { ActionState } from "@/lib/action-state";
 import type { TenantRequest } from "@/db/schema";
 
@@ -78,5 +79,18 @@ export async function cancelRequest(id: string): Promise<ActionState> {
     revalidatePath("/me/requests");
     revalidatePath("/requests");
     return { ok: "Cancelled." };
+  });
+}
+
+/** A tenant reports clothes missing or damaged from a load that came back. */
+export async function reportLaundryClaim(loadId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return mutate(async () => {
+    const { user, occupant } = await requireTenant();
+    const result = await createClaim(loadId, fd, user.id, occupant.id);
+    if ("error" in result) return { error: result.error };
+    await audit(user.id, "create", "laundry_claim", result.claim.id, { number: result.load.number, kind: result.claim.kind });
+    revalidatePath("/me/laundry");
+    revalidatePath("/laundry");
+    return { ok: "Sent. The front desk will follow up with the shop." };
   });
 }

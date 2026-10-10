@@ -4,12 +4,16 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { StaffRole } from "@/db/schema";
 
-export type PhotoScope = "billing" | "inventory";
+export type PhotoScope = "billing" | "inventory" | "laundry";
 
-/** Who may open a photo: billing papers stay with the office; room-item photos are for everyone who works on rooms. */
+/**
+ * Who may open a photo: billing papers stay with the office; room-item photos are for everyone who works on rooms;
+ * laundry claim photos are for the desk. Whoever uploaded a photo can always open it.
+ */
 export const PHOTO_ROLES: Record<PhotoScope, StaffRole[]> = {
   billing: ["admin", "front_desk"],
   inventory: ["admin", "front_desk", "maintenance"],
+  laundry: ["admin", "front_desk"],
 };
 
 const MAX_BYTES = 8 * 1024 * 1024;

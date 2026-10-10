@@ -10,6 +10,6 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/photos/[id]">) 
   const headers = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
   const user = await getCurrentStaff();
   const photo = user && UUID.test(id) ? await getPhoto(id) : undefined;
-  if (!user || !photo || !PHOTO_ROLES[photo.scope].includes(user.role)) return new Response("Not found", { status: 404, headers });
+  if (!user || !photo || (!PHOTO_ROLES[photo.scope].includes(user.role) && photo.uploadedBy !== user.id)) return new Response("Not found", { status: 404, headers });
   return new Response(new Uint8Array(Buffer.from(photo.data, "base64")), { headers: { ...headers, "Content-Type": "image/webp" } });
 }

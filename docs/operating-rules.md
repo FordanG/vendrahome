@@ -1,6 +1,6 @@
 # Operating rules and rollout
 
-These corrections address the 3 October 2026 platform review. Billing and room inventory were added afterwards (see their sections below); door codes and housekeeping were added after that; full laundry is still to come.
+These corrections address the 3 October 2026 platform review. Billing and room inventory were added afterwards (see their sections below); door codes, housekeeping and laundry were added after that.
 
 ## Rooms and stays
 
@@ -112,3 +112,12 @@ Check room, occupant and assignment counts and representative records before sel
 - A room has at most one cleaning in progress; scanning again continues it. A cleaning started from the room page without scanning is recorded and flagged as not scanned.
 - A finished cleaning keeps the steps that weren't ticked, and can't be changed. One started by mistake can be cancelled before it is finished.
 - The first checklist comes with the database update; the admin edits it on the Housekeeping page.
+
+## Laundry
+
+- Tenants bring bags to the front desk. Admin and front desk log, send, weigh and hand back loads; maintenance doesn't see laundry. Only the admin sets services and prices and sees the shop's cost and margin.
+- A load is at the desk, at the shop, ready to pick up, picked up, or cancelled. Only a load not yet weighed can be cancelled.
+- Weighing happens once and adds one charge: kilos × the service's price, never less than its minimum. Who pays follows the contract's Laundry charge rule (the tenant by default), and falls back to the tenant when there's no company to bill. A wrong weight is fixed in Billing by reversing the charge and adding the right one.
+- Price changes apply to loads weighed afterwards.
+- Tenants can report something missing or damaged up to 7 days after a load comes back; the desk can record one at any time. Claim photos are seen by the desk and whoever took them. The settlement note is shown to the tenant.
+- The weekly laundry times on the Kitchen & laundry page now mean when the shop collects from the desk. Tenants can no longer ask for a different pickup day.

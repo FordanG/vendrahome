@@ -4,13 +4,9 @@ import { getDb, schema } from "@/db";
 import { requireTenant } from "@/lib/auth";
 import { formatDate, formatTimeRange, todayISO } from "@/lib/format";
 import {
-  appliesToRoom,
   getCurrentStay,
-  getSchedule,
   REQUEST_KIND_LABELS,
   REQUEST_STATUS_TONES,
-  daysLabel,
-  groupByDays,
   requestStatusLabel,
 } from "@/lib/portal";
 import { ActionForm } from "@/components/action-form";
@@ -29,9 +25,8 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
   const pageSize = 50;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.max(1, Math.min(totalPages, Math.floor(Number(params.page) || 1)));
-  const [stay, schedule, requests] = await Promise.all([
+  const [stay, requests] = await Promise.all([
     getCurrentStay(occupant.id),
-    getSchedule(),
     db
       .select()
       .from(schema.tenantRequests)
@@ -47,7 +42,6 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
   const areaNames = new Map(
     areaIds.length ? (await db.query.areas.findMany({ columns: { id: true, name: true } })).map((a) => [a.id, a.name]) : [],
   );
-  const laundry = stay ? schedule.map((s) => s.e).filter((e) => e.kind === "laundry" && appliesToRoom(e, stay.room)) : [];
 
   return (
     <>
@@ -75,17 +69,16 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
             <SectionTitle>Send a new request</SectionTitle>
             <ActionForm action={createRequest} submitLabel="Send" pendingLabel="Sending…" resetOnSuccess>
               <Field label="What do you need?">
-                <Select name="kind" defaultValue={kind === "laundry" || kind === "maintenance" ? kind : "issue"}>
+                <Select name="kind" defaultValue={kind === "maintenance" ? kind : "issue"}>
                   <option value="issue">Report a problem in my room</option>
                   <option value="maintenance">Ask for a maintenance visit</option>
-                  <option value="laundry">Laundry pickup on a different day</option>
                 </Select>
               </Field>
               <Field label="Tell us more" hint="What happened, where in the room, and anything we should know">
                 <Textarea name="details" rows={4} required maxLength={2000} />
               </Field>
               <FormGrid>
-                <Field label="Preferred date" hint="Needed for maintenance visits and laundry pickups">
+                <Field label="Preferred date" hint="Needed for maintenance visits">
                   <Input name="preferredDate" type="date" min={todayISO()} />
                 </Field>
                 <Field label="Preferred time" hint="e.g. After 6 PM, Morning">
@@ -96,11 +89,7 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
                 <input type="checkbox" name="urgent" /> Urgent (leak, no power, safety problem)
               </label>
               <p className="text-xs text-muted">
-                Maintenance and laundry requests need approval. You&apos;ll see the answer below.
-                {laundry.length > 0 &&
-                  ` Regular laundry pickup: ${groupByDays(laundry)
-                    .map((g) => `${daysLabel(g.days)} ${formatTimeRange(g.first.startTime, g.first.endTime)}`)
-                    .join("; ")}.`}
+                Maintenance visits need approval. You&apos;ll see the answer below. For laundry, bring your bag to the front desk.
               </p>
             </ActionForm>
           </Card>

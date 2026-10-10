@@ -142,6 +142,9 @@ export const CAN = {
   cleanRooms: ["admin", "front_desk"] as StaffRole[],
   manageCleaningSchedule: ["admin", "front_desk"] as StaffRole[],
   manageChecklist: ["admin"] as StaffRole[],
+  // Laundry: the front desk takes bags in and out; the admin sets rates and sees the shop's cost.
+  handleLaundry: ["admin", "front_desk"] as StaffRole[],
+  manageLaundryRates: ["admin"] as StaffRole[],
   // Shared spaces with their own door code.
   manageAreas: ["admin"] as StaffRole[],
   // Billing: front desk sees accounts, takes payments and adds charges; the admin

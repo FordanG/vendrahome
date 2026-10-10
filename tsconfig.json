@@ -36,7 +36,9 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts",
     ".next/e2e/types/**/*.ts",
-    ".next/e2e/dev/types/**/*.ts"
+    ".next/e2e/dev/types/**/*.ts",
+    ".next/buildcheck/types/**/*.ts",
+    ".next/buildcheck/dev/types/**/*.ts"
   ],
   // .next/e2e is the end-to-end test build; its route types would clash with .next/dev
   "exclude": [

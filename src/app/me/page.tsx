@@ -5,6 +5,7 @@ import { requireTenant } from "@/lib/auth";
 import { formatDate, formatPeso, formatTimeRange, todayISO } from "@/lib/format";
 import { occupantAccount } from "@/lib/billing";
 import { roomCleaning } from "@/lib/housekeeping";
+import { LAUNDRY_STATUS_LABELS, loadLabel } from "@/lib/laundry";
 import {
   appliesToRoom,
   getCurrentStay,
@@ -37,6 +38,12 @@ export default async function TenantHomePage() {
     occupantAccount(occupant.id),
   ]);
   const cleaning = stay ? await roomCleaning(stay.room.id, today) : null;
+  // Bags not picked up yet.
+  const laundry = await db
+    .select()
+    .from(schema.laundryLoads)
+    .where(and(eq(schema.laundryLoads.occupantId, occupant.id), inArray(schema.laundryLoads.status, ["at_desk", "at_shop", "ready"])))
+    .orderBy(asc(schema.laundryLoads.number));
   const visits = stay
     ? await db
         .select()
@@ -120,15 +127,20 @@ export default async function TenantHomePage() {
               <Timetable entries={mine.filter((e) => e.kind === "kitchen")} today={weekday} />
             </Card>
             <Card>
-              <SectionTitle>Laundry pickup days</SectionTitle>
+              <SectionTitle actions={<Link className="text-sm text-muted underline" href="/me/laundry">Your laundry</Link>}>
+                Laundry days
+              </SectionTitle>
+              {laundry.length > 0 && (
+                <ul className="mb-3 space-y-1 text-sm">
+                  {laundry.map((l) => (
+                    <li key={l.id}>
+                      <span className="plate font-bold">{loadLabel(l.number)}</span>: {LAUNDRY_STATUS_LABELS[l.status]}
+                    </li>
+                  ))}
+                </ul>
+              )}
               <Timetable entries={mine.filter((e) => e.kind === "laundry")} today={weekday} />
-              <p className="mt-3 text-xs text-muted">
-                Can&apos;t make these times?{" "}
-                <Link className="underline" href="/me/requests?kind=laundry">
-                  Ask for another day
-                </Link>
-                .
-              </p>
+              <p className="mt-3 text-xs text-muted">Bring your bag to the front desk. The shop collects it at these times.</p>
             </Card>
           </div>
         )}

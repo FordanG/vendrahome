@@ -384,7 +384,7 @@ export const tenantRequests = pgTable(
 // ---------------------------------------------------------------------------
 // Photos: bills, payment proofs and room items. Stored re-encoded (WebP, no
 // metadata) like profile photos. `scope` decides which roles may open them.
-export const photoScope = pgEnum("photo_scope", ["billing", "inventory"]);
+export const photoScope = pgEnum("photo_scope", ["billing", "inventory", "laundry"]);
 
 export const photos = pgTable("photos", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -698,3 +698,77 @@ export type ItemCondition = (typeof itemCondition.enumValues)[number];
 export type ItemCategory = (typeof itemCategory.enumValues)[number];
 export type InventoryCheckKind = (typeof inventoryCheckKind.enumValues)[number];
 export type PaymentMethod = (typeof paymentMethod.enumValues)[number];
+
+// ---------------------------------------------------------------------------
+// Laundry. Tenants drop bags at the front desk; the desk sends them to the
+// outside shop, enters the weight from the shop's slip when they come back
+// (which adds the charge), and hands them back to the tenant.
+export const laundryServices = pgTable("laundry_services", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  // What the tenant or company pays, and what the shop charges the hotel, per kilo.
+  ratePerKilo: centavos("rate_per_kilo").notNull(),
+  costPerKilo: centavos("cost_per_kilo"),
+  minimumCharge: centavos("minimum_charge"),
+  turnaroundDays: integer("turnaround_days").notNull().default(2),
+  active: boolean("active").notNull().default(true),
+  position: integer("position").notNull().default(0),
+});
+
+export const laundryStatus = pgEnum("laundry_status", ["at_desk", "at_shop", "ready", "collected", "cancelled"]);
+
+export const laundryLoads = pgTable(
+  "laundry_loads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // Written on the bag's tag so the desk, the shop and the tenant mean the same bag.
+    number: integer("number").generatedAlwaysAsIdentity().notNull().unique(),
+    occupantId: uuid("occupant_id")
+      .notNull()
+      .references(() => occupants.id),
+    roomId: uuid("room_id").references(() => rooms.id, { onDelete: "set null" }),
+    serviceId: uuid("service_id")
+      .notNull()
+      .references(() => laundryServices.id),
+    bags: integer("bags").notNull().default(1),
+    status: laundryStatus("status").notNull().default("at_desk"),
+    notes: text("notes"),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+    receivedBy: uuid("received_by").references(() => staff.id, { onDelete: "set null" }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    returnedAt: timestamp("returned_at", { withTimezone: true }),
+    // From the shop's slip. Grams, so 3.25 kg is 3250.
+    grams: integer("grams"),
+    amount: centavos("amount"),
+    cost: centavos("cost"),
+    chargeId: uuid("charge_id").references(() => charges.id),
+    collectedAt: timestamp("collected_at", { withTimezone: true }),
+    handledBy: uuid("handled_by").references(() => staff.id, { onDelete: "set null" }),
+  },
+  (t) => [index("laundry_status_idx").on(t.status), index("laundry_occupant_idx").on(t.occupantId)],
+);
+
+export const claimKind = pgEnum("laundry_claim_kind", ["missing", "damaged"]);
+export const claimStatus = pgEnum("laundry_claim_status", ["open", "resolved"]);
+
+// Clothes that came back missing or damaged. Reported by the tenant or the desk.
+export const laundryClaims = pgTable("laundry_claims", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  loadId: uuid("load_id")
+    .notNull()
+    .references(() => laundryLoads.id, { onDelete: "cascade" }),
+  kind: claimKind("kind").notNull(),
+  details: text("details").notNull(),
+  photoId: uuid("photo_id").references(() => photos.id),
+  status: claimStatus("status").notNull().default("open"),
+  resolution: text("resolution"),
+  reportedBy: uuid("reported_by").references(() => staff.id, { onDelete: "set null" }),
+  resolvedBy: uuid("resolved_by").references(() => staff.id, { onDelete: "set null" }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type LaundryService = typeof laundryServices.$inferSelect;
+export type LaundryLoad = typeof laundryLoads.$inferSelect;
+export type LaundryStatus = (typeof laundryStatus.enumValues)[number];
+export type LaundryClaim = typeof laundryClaims.$inferSelect;
