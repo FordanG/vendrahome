@@ -160,6 +160,16 @@ async function add() {
     .returning();
   ids.clients.push(company.id);
 
+  // The company's own logins: its HR lead (company admin) and a coordinator (company staff).
+  const companyLogins = await db
+    .insert(schema.staff)
+    .values([
+      { name: "Liza Mercado (demo)", username: "demo.hr", role: "company_admin", clientId: company.id, passwordHash: hash },
+      { name: "Jun Aquino (demo)", username: "demo.coord", role: "company_staff", clientId: company.id, passwordHash: hash },
+    ])
+    .returning();
+  ids.staff.push(...companyLogins.map((s) => s.id));
+
   const taken = new Set(
     (
       await db
@@ -388,6 +398,8 @@ Sign in with any of these (password for all: ${PASSWORD}):
   demo.admin   admin
   demo.desk    front desk & housekeeping
   demo.fix     maintenance
+  demo.hr      company admin for ${company.name}
+  demo.coord   company staff for ${company.name}
 ${TENANTS.map((t) => `  ${t.username.padEnd(12)} tenant, room ${t.room} (${occupants[t.index].fullName})`).join("\n")}
 ${admin ? `  ${admin.username.padEnd(12)} your own admin password` : ""}
 

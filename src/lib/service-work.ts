@@ -58,7 +58,11 @@ export async function syncVisitRequest(visit: MaintenanceVisit, user: Pick<Staff
   }).where(eq(schema.tenantRequests.id, visit.requestId));
 }
 
+/** The requests a hotel login works on. Requests still waiting for a company's OK aren't the hotel's yet. */
 export function requestScope(user: Pick<Staff, "id" | "role">) {
-  return user.role === "maintenance" ? and(ne(schema.tenantRequests.kind, "laundry"),
-    or(isNull(schema.tenantRequests.assigneeId), eq(schema.tenantRequests.assigneeId, user.id))) : undefined;
+  return and(
+    eq(schema.tenantRequests.awaitingCompany, false),
+    user.role === "maintenance" ? and(ne(schema.tenantRequests.kind, "laundry"),
+      or(isNull(schema.tenantRequests.assigneeId), eq(schema.tenantRequests.assigneeId, user.id))) : undefined,
+  );
 }

@@ -45,6 +45,8 @@ pnpm db:demo                             # demo data and the accounts below
 | `demo.admin` | Admin | `demo1234` |
 | `demo.desk` | Front desk & housekeeping | `demo1234` |
 | `demo.fix` | Maintenance | `demo1234` |
+| `demo.hr` | Company admin (the demo company) | `demo1234` |
+| `demo.coord` | Company staff (the demo company) | `demo1234` |
 | `demo.juan` (room 203), `demo.maria` (room 312), `demo.paolo` (room 507) | Tenant | `demo1234` |
 
 These passwords are for local testing only. Run `pnpm db:demo:remove` before putting real data in.
@@ -74,7 +76,7 @@ It starts its own server on port 3456 with a fresh database in `.data/e2e` and b
 
 ## Built so far (phase 1)
 
-- Sign-in with roles: admin, front desk & housekeeping, maintenance, tenant
+- Sign-in with roles: admin, front desk & housekeeping, maintenance, tenant, company admin, company staff
 - Room board with derived status (occupied, contracted-empty, vacant, needs work, not available)
 - Rooms and room types, capacity and condition
 - Clients and contracts: rooms covered, one total rent or per-room rates, any number of rent increases, rent schedule, overlap checks
@@ -93,8 +95,9 @@ It starts its own server on port 3456 with a fresh database in `.data/e2e` and b
 - Staff reports and repair costs: staff report a problem in a room from Requests or the door code, with a photo; tenants can add a photo too. Each request can record what the repair cost and who pays: the hotel, or a Damage charge to the company or tenant (charged once).
 - Maintenance checklists (`/maintenance/checklists`): the admin writes checklists (a monthly room check and a safety check to start) that repeat for every room on their own cycle. Staff run them from the door code or the room page; each problem becomes a request for the room. Rooms due and overdue show per checklist.
 - Feedback (`/feedback`): tenants rate a cleaning of their room, a repair visit or a laundry load from the last two weeks, from their home page. Ratings of 3 stars or fewer stay flagged until the office writes a follow-up; 30-day averages per topic.
+- Company accounts (`/company`, see `docs/company-accounts.md`): each company that leases rooms gets its own logins. Company admins and staff see only their company: its rooms and who lives there, its people (add and edit them, give them tenant logins), requests from its people and rooms, and, for company admins, its bills and its team's logins. They ask for move-ins and move-outs, which the front desk confirms on Room assignments. The hotel admin sets each company's agreement on its page: whether it keeps its people's details, whether its tenants' requests need its OK first, and whether its admins see bills.
 
-Not yet: hosting, backups and the public address (`APP_URL`). After the first version: reminders, taxes, monthly reports, supplies, and a page for the leasing company. Moving to Supabase for shared hosting.
+Not yet: hosting, backups and the public address (`APP_URL`). After the first version: reminders, taxes, monthly reports and supplies. Moving to Supabase for shared hosting.
 
 
 ## Account profiles

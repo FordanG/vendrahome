@@ -89,6 +89,7 @@ export async function getRoomBoard(today: string): Promise<BoardRoom[]> {
         and(
           inArray(schema.tenantRequests.kind, ["issue", "maintenance"]),
           inArray(schema.tenantRequests.status, ["pending", "approved"]),
+          eq(schema.tenantRequests.awaitingCompany, false),
         ),
       ),
   ]);

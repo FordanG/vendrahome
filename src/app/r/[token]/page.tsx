@@ -302,7 +302,7 @@ async function AreaView({ area }: { area: Area }) {
     .select({ r: schema.tenantRequests, name: schema.occupants.fullName })
     .from(schema.tenantRequests)
     .leftJoin(schema.occupants, eq(schema.tenantRequests.occupantId, schema.occupants.id))
-    .where(and(eq(schema.tenantRequests.areaId, area.id), inArray(schema.tenantRequests.status, ["pending", "approved"])))
+    .where(and(eq(schema.tenantRequests.areaId, area.id), inArray(schema.tenantRequests.status, ["pending", "approved"]), eq(schema.tenantRequests.awaitingCompany, false)))
     .orderBy(desc(schema.tenantRequests.urgent), desc(schema.tenantRequests.createdAt));
   return (
     <>

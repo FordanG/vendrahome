@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { and, asc, count, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN, requireStaff, STAFF_ROLES } from "@/lib/auth";
 import { centavosToInput, formatDate, formatPeso, formatTimeRange, todayISO } from "@/lib/format";
 import { REQUEST_KIND_LABELS, REQUEST_STATUS_TONES, requestStatusLabel } from "@/lib/portal";
 import { ActionForm } from "@/components/action-form";
 import { Badge, Card, Empty, Field, FormGrid, Input, PageHeader, Select, Textarea, ViewTabs } from "@/components/ui";
-import { canHandleRequest } from "@/lib/service-work";
+import { canHandleRequest, requestScope } from "@/lib/service-work";
 import { createStaffRequest, recordRepairCost, reportProblem, updateRequest } from "./actions";
 import type { TenantRequest } from "@/db/schema";
 
@@ -32,9 +32,9 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
 
   const page = Math.max(1, Math.min(100000, Math.floor(Number(params.page) || 1)));
   const pageSize = 50;
-  const scope = user.role === "maintenance" ? and(ne(schema.tenantRequests.kind, "laundry"), or(isNull(schema.tenantRequests.assigneeId), eq(schema.tenantRequests.assigneeId, user.id))) : undefined;
+  const scope = requestScope(user);
   const db = await getDb();
-  const staff = await db.query.staff.findMany({ where: and(eq(schema.staff.active, true), ne(schema.staff.role, "tenant")), orderBy: [asc(schema.staff.name)] });
+  const staff = await db.query.staff.findMany({ where: and(eq(schema.staff.active, true), inArray(schema.staff.role, STAFF_ROLES)), orderBy: [asc(schema.staff.name)] });
   const occupants = CAN.manageOccupants.includes(user.role) ? await db.query.occupants.findMany({ orderBy: [asc(schema.occupants.fullName)] }) : [];
   const rooms = await db.select({ id: schema.rooms.id, number: schema.rooms.number }).from(schema.rooms).orderBy(asc(schema.rooms.number));
   const canCharge = CAN.recordBilling.includes(user.role);

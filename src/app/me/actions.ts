@@ -11,6 +11,7 @@ import { audit } from "@/lib/audit";
 import { isISODate, str, todayISO } from "@/lib/format";
 import { getCurrentStay } from "@/lib/portal";
 import { createClaim } from "@/lib/laundry";
+import { needsCompanyOk } from "@/lib/company";
 import { savePhoto } from "@/lib/photos";
 import { toRate } from "@/lib/feedback";
 import type { ActionState } from "@/lib/action-state";
@@ -47,6 +48,8 @@ export async function createRequest(_: ActionState, fd: FormData): Promise<Actio
     if (area && kind !== "issue") return { error: "Only problems can be reported for a shared space." };
     const photo = await savePhoto("request", fd.get("photo"), user.id);
     if (photo && "error" in photo) return { error: photo.error };
+    const urgent = fd.get("urgent") === "on";
+    const awaitingCompany = await needsCompanyOk(occupant.clientId, urgent);
     const [created] = await db
       .insert(schema.tenantRequests)
       .values({
@@ -56,7 +59,8 @@ export async function createRequest(_: ActionState, fd: FormData): Promise<Actio
         photoId: photo?.id ?? null,
         kind,
         details,
-        urgent: fd.get("urgent") === "on",
+        urgent,
+        awaitingCompany,
         preferredDate,
         preferredTime: str(fd.get("preferredTime")),
       })
@@ -65,6 +69,7 @@ export async function createRequest(_: ActionState, fd: FormData): Promise<Actio
     revalidatePath("/me");
     revalidatePath("/me/requests");
     revalidatePath("/requests");
+    if (awaitingCompany) return { ok: "Sent. Your company looks at it first, then the front desk." };
     return { ok: kind === "issue" ? "Sent. The front desk will look into it." : "Sent. We'll let you know if it's approved." };
   });
 }

@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { PGlite } from "@electric-sql/pglite";
 import bcrypt from "bcryptjs";
 import { addDaysISO, todayISO } from "../src/lib/format";
-import { ADMIN, E2E_DB, FRONT_DESK, MAINTENANCE, RESIDENT, TENANT } from "./accounts";
+import { ADMIN, COMPANY_ADMIN, E2E_DB, FRONT_DESK, MAINTENANCE, OTHER_COMPANY, RESIDENT, TENANT } from "./accounts";
 
 async function main() {
   const dataDir = path.join(process.cwd(), E2E_DB);
@@ -62,6 +62,18 @@ async function main() {
   await db.query("insert into contract_rooms (contract_id, room_id) select $1, id from rooms", [contract.id]);
   await db.query("update occupants set client_id = $1", [client.id]);
   await db.query("update room_assignments set contract_id = $1", [contract.id]);
+  await db.query("insert into staff (name, username, password_hash, role, client_id) values ('Hana Reyes', $1, $2, 'company_admin', $3)", [
+    COMPANY_ADMIN.username,
+    await bcrypt.hash(COMPANY_ADMIN.password, 10),
+    client.id,
+  ]);
+  const { rows: [other] } = await db.query<{ id: string }>("insert into clients (name) values ($1) returning id", [OTHER_COMPANY.name]);
+  await db.query("insert into occupants (full_name, client_id, status) values ($1, $2, 'inactive')", [OTHER_COMPANY.person, other.id]);
+  await db.query("insert into staff (name, username, password_hash, role, client_id) values ('Otto Other', $1, $2, 'company_admin', $3)", [
+    OTHER_COMPANY.username,
+    await bcrypt.hash(OTHER_COMPANY.password, 10),
+    other.id,
+  ]);
   await db.close();
   console.log("E2E database ready.");
 }

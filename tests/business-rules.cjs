@@ -20,6 +20,7 @@ Module._load = function (id, parent, ...rest) {
     requireStaff: async (roles = auth.STAFF_ROLES) => { const actor = actors.getStore(); if (!actor || !roles.includes(actor.role)) throw new Error('forbidden'); return actor; },
     requireUser: async () => actors.getStore(),
     requireTenant: async () => ({ user: actors.getStore(), occupant: await (await getDb()).query.occupants.findFirst({ where: eq(schema.occupants.id, actors.getStore().occupantId) }) }),
+    requireCompany: async (roles = auth.COMPANY_ROLES) => { const actor = actors.getStore(); if (!actor || !roles.includes(actor.role) || !actor.clientId) throw new Error('forbidden'); return { user: actor, client: await (await getDb()).query.clients.findFirst({ where: eq(schema.clients.id, actor.clientId) }) }; },
     currentSessionId: async () => 'keep-session',
   };
   return originalLoad.call(this, id, parent, ...rest);
@@ -48,6 +49,9 @@ const feedbackActions = require('../src/app/(app)/feedback/actions.ts');
 const { importOccupants } = require('../src/app/(app)/assignments/import/actions.ts');
 const { cancelRequest, createRequest } = require('../src/app/me/actions.ts');
 const { changeOwnPassword } = require('../src/app/(app)/staff/actions.ts');
+const companyActions = require('../src/app/company/actions.ts');
+const stayAsks = require('../src/app/(app)/assignments/actions.ts');
+const { requestScope } = require('../src/lib/service-work.ts');
 const today = todayISO();
 let db, admin, fix, otherFix, company, otherCompany, contract;
 const fd = values => { const form = new FormData(); for (const [key,value] of Object.entries(values)) for (const v of Array.isArray(value) ? value : [value]) form.append(key, String(v ?? '')); return form; };
@@ -492,4 +496,92 @@ test('feedback: tenants rate their own room cleaning once; low ratings need a fo
   await assert.rejects(()=>actors.run(fix,()=>feedbackActions.followUp(f.id,{},fd({followUp:'x'}))));
   assert.ok((await run(feedbackActions.followUp,f.id,{},fd({followUp:'Re-cleaned the bathroom'}))).ok);
   assert.ok((await run(feedbackActions.followUp,f.id,{},fd({followUp:'Again'}))).error);
+});
+
+async function companyLogin(role, clientId = company.id) {
+  return (await db.insert(schema.staff).values({ name: `Co ${++serial}`, username: `co${serial}`, role, clientId, passwordHash: 'unused' }).returning())[0];
+}
+test('company logins only touch their own company: people, logins and team', async () => {
+  const hr = await companyLogin('company_admin'); const coord = await companyLogin('company_staff'); const rival = await companyLogin('company_admin', otherCompany.id);
+  const as = (actor, fn, ...args) => actors.run(actor, () => fn(...args));
+  assert.match(await redirectedTo(as(coord, companyActions.savePerson, null, {}, fd({ fullName: 'Added By Company', notes: 'sneaky' }))), /^\/company\/people\//);
+  const added = await db.query.occupants.findFirst({ where: eq(schema.occupants.fullName, 'Added By Company') });
+  assert.equal(added.clientId, company.id); assert.equal(added.notes, null, 'hotel notes are not theirs to set');
+  await db.update(schema.occupants).set({ notes: 'Hotel note' }).where(eq(schema.occupants.id, added.id));
+  assert.ok((await as(coord, companyActions.savePerson, added.id, {}, fd({ fullName: 'Renamed', notes: 'overwrite' }))).ok);
+  assert.equal((await db.query.occupants.findFirst({ where: eq(schema.occupants.id, added.id) })).notes, 'Hotel note');
+  assert.ok((await as(rival, companyActions.savePerson, added.id, {}, fd({ fullName: 'Stolen' }))).error, 'other company');
+  assert.ok((await as(rival, companyActions.createPersonLogin, added.id, {}, fd({ username: 'stolen.login', password: 'password123' }))).error);
+  assert.ok((await as(hr, companyActions.createPersonLogin, added.id, {}, fd({ username: `own.login${serial}`, password: 'password123' }))).ok);
+  const login = await db.query.staff.findFirst({ where: eq(schema.staff.occupantId, added.id) });
+  assert.equal(login.role, 'tenant'); assert.equal(login.clientId, null);
+  await db.update(schema.clients).set({ selfManagePeople: false }).where(eq(schema.clients.id, company.id));
+  try { assert.ok((await as(hr, companyActions.savePerson, added.id, {}, fd({ fullName: 'Blocked' }))).error, 'agreement says the hotel keeps details'); }
+  finally { await db.update(schema.clients).set({ selfManagePeople: true }).where(eq(schema.clients.id, company.id)); }
+  // Team: only company admins, only their own company, never their own admin access.
+  await assert.rejects(() => as(coord, companyActions.saveTeamMember, null, {}, fd({ name: 'X', username: `x${serial}`, password: 'password123', role: 'company_admin' })));
+  assert.ok((await as(hr, companyActions.saveTeamMember, null, {}, fd({ name: 'New coord', username: `newcoord${serial}`, password: 'password123', role: 'admin' }))).error, 'no hotel roles');
+  assert.ok((await as(hr, companyActions.saveTeamMember, rival.id, {}, fd({ role: 'company_staff', active: 'on' }))).error, 'other company login');
+  assert.ok((await as(hr, companyActions.saveTeamMember, hr.id, {}, fd({ role: 'company_staff', active: 'on' }))).error, 'own admin access');
+  assert.ok((await as(hr, companyActions.saveTeamMember, coord.id, {}, fd({ role: 'company_staff' }))).ok);
+  assert.equal((await db.query.staff.findFirst({ where: eq(schema.staff.id, coord.id) })).active, false);
+  // Hotel pages stay closed to company logins.
+  await assert.rejects(() => as(hr, occupancy.updateOccupant, added.id, {}, fd({ fullName: 'Via hotel page' })));
+});
+test('companies ask for move-ins and move-outs; the front desk does them with the usual checks', async () => {
+  const hr = await companyLogin('company_admin'); const rival = await companyLogin('company_admin', otherCompany.id);
+  const desk = (await db.insert(schema.staff).values({ name: 'Desk', username: `desk${++serial}`, role: 'front_desk', passwordHash: 'unused' }).returning())[0];
+  const as = (actor, fn, ...args) => actors.run(actor, () => fn(...args));
+  const r = await room(1); const outside = await room(1, false); const p = await person();
+  assert.ok((await as(hr, companyActions.askMoveIn, p.id, {}, fd({ roomId: outside.id, date: today }))).error, 'room not under their contract');
+  assert.ok((await as(hr, companyActions.askMoveIn, p.id, {}, fd({ roomId: r.id, date: addDaysISO(today, -1) }))).error, 'past date');
+  assert.ok((await as(rival, companyActions.askMoveIn, p.id, {}, fd({ roomId: r.id, date: today }))).error, 'not their person');
+  assert.ok((await as(hr, companyActions.askMoveIn, p.id, {}, fd({ roomId: r.id, date: today, slot: 'A', note: 'Arrives 6 PM' }))).ok);
+  assert.ok((await as(hr, companyActions.askMoveIn, p.id, {}, fd({ roomId: r.id, date: today }))).error, 'one open ask');
+  const ask = await db.query.stayRequests.findFirst({ where: eq(schema.stayRequests.occupantId, p.id) });
+  await assert.rejects(() => as(hr, stayAsks.confirmStayRequest, ask.id, {}, fd({})), 'companies cannot do it themselves');
+  assert.equal(await openStay(p), undefined);
+  assert.ok((await as(desk, stayAsks.confirmStayRequest, ask.id, {}, fd({ keysIssued: '1 key' }))).ok);
+  const stay = await openStay(p);
+  assert.equal(stay.roomId, r.id); assert.equal(stay.slot, 'A');
+  assert.equal((await db.query.stayRequests.findFirst({ where: eq(schema.stayRequests.id, ask.id) })).status, 'done');
+  assert.ok((await as(desk, stayAsks.confirmStayRequest, ask.id, {}, fd({}))).error, 'only once');
+  // The room is now full: another person's ask goes through, but the desk can't overfill it.
+  const q = await person();
+  assert.ok((await as(hr, companyActions.askMoveIn, q.id, {}, fd({ roomId: r.id, date: today }))).ok);
+  const full = await db.query.stayRequests.findFirst({ where: eq(schema.stayRequests.occupantId, q.id) });
+  assert.ok((await as(desk, stayAsks.confirmStayRequest, full.id, {}, fd({}))).error);
+  assert.ok((await as(desk, stayAsks.declineStayRequest, full.id, {}, fd({}))).error, 'needs a reason');
+  assert.ok((await as(desk, stayAsks.declineStayRequest, full.id, {}, fd({ response: 'Room is full' }))).ok);
+  // Move-out: confirmed on the day, not before.
+  assert.ok((await as(hr, companyActions.askMoveOut, p.id, {}, fd({ date: today }))).ok);
+  const out = await db.query.stayRequests.findFirst({ where: (t, { and, eq }) => and(eq(t.occupantId, p.id), eq(t.status, 'pending')) });
+  assert.ok((await as(desk, stayAsks.confirmStayRequest, out.id, {}, fd({ date: addDaysISO(today, 1) }))).error);
+  assert.ok((await as(desk, stayAsks.confirmStayRequest, out.id, {}, fd({ date: today }))).ok);
+  assert.equal(await getCurrentStay(p.id), null);
+});
+test('tenant requests wait for the company when its agreement says so', async () => {
+  const hr = await companyLogin('company_staff'); const rival = await companyLogin('company_admin', otherCompany.id);
+  const desk = (await db.insert(schema.staff).values({ name: 'Desk', username: `desk${++serial}`, role: 'front_desk', passwordHash: 'unused' }).returning())[0];
+  const as = (actor, fn, ...args) => actors.run(actor, () => fn(...args));
+  const r = await room(); const p = await person(); await assign(p, r);
+  const [tenant] = await db.insert(schema.staff).values({ name: p.fullName, username: `ok.tenant${++serial}`, role: 'tenant', occupantId: p.id, passwordHash: 'unused' }).returning();
+  await db.update(schema.clients).set({ approveRequests: true }).where(eq(schema.clients.id, company.id));
+  try {
+    assert.match((await as(tenant, createRequest, {}, fd({ kind: 'issue', details: 'Squeaky door' }))).ok, /company/);
+    assert.ok((await as(tenant, createRequest, {}, fd({ kind: 'issue', details: 'Water leaking', urgent: 'on' }))).ok);
+  } finally { await db.update(schema.clients).set({ approveRequests: false }).where(eq(schema.clients.id, company.id)); }
+  const mine = await db.query.tenantRequests.findMany({ where: eq(schema.tenantRequests.occupantId, p.id) });
+  const waiting = mine.find((q) => q.details === 'Squeaky door'); const urgent = mine.find((q) => q.urgent);
+  assert.equal(waiting.awaitingCompany, true); assert.equal(urgent.awaitingCompany, false, 'urgent goes straight to the hotel');
+  const hotelSees = await db.select().from(schema.tenantRequests).where(requestScope(desk));
+  assert.ok(!hotelSees.some((q) => q.id === waiting.id)); assert.ok(hotelSees.some((q) => q.id === urgent.id));
+  assert.ok((await as(desk, requests.updateRequest, waiting.id, {}, fd({ status: 'approved' }))).error, 'not the hotel\'s yet');
+  assert.ok((await as(rival, companyActions.reviewRequest, waiting.id, {}, fd({ decision: 'approve' }))).error, 'other company');
+  assert.ok((await as(hr, companyActions.reviewRequest, waiting.id, {}, fd({ decision: 'decline' }))).error, 'decline needs a reason');
+  assert.ok((await as(hr, companyActions.reviewRequest, waiting.id, {}, fd({ decision: 'approve', note: 'Go ahead' }))).ok);
+  const approved = await db.query.tenantRequests.findFirst({ where: eq(schema.tenantRequests.id, waiting.id) });
+  assert.equal(approved.awaitingCompany, false); assert.equal(approved.status, 'pending'); assert.equal(approved.companyReviewedBy, hr.id);
+  assert.ok((await as(hr, companyActions.reviewRequest, waiting.id, {}, fd({ decision: 'decline', note: 'x' }))).error, 'only once');
+  assert.ok((await as(desk, requests.updateRequest, waiting.id, {}, fd({ status: 'done' }))).ok);
 });

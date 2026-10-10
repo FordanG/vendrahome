@@ -57,8 +57,11 @@ export const REQUEST_KIND_LABELS = {
 } as const;
 
 /** Problem reports read as a ticket; maintenance and laundry requests read as an approval. */
-export function requestStatusLabel(r: Pick<TenantRequest, "kind" | "status"> & { cancelledAt?: Date | null }): string {
+export function requestStatusLabel(
+  r: Pick<TenantRequest, "kind" | "status"> & { cancelledAt?: Date | null; awaitingCompany?: boolean },
+): string {
   if (r.cancelledAt) return "Withdrawn";
+  if (r.awaitingCompany) return "Waiting for your company's OK";
   if (r.kind === "issue") {
     return { pending: "New", approved: "Being fixed", declined: "Closed", done: "Fixed" }[r.status];
   }

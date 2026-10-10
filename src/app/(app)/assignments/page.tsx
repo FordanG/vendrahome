@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { and, asc, eq, isNull, lte } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
 import { getRoomBoard } from "@/lib/rooms";
@@ -7,7 +8,10 @@ import { STATUS_LABELS, STATUS_TONES } from "@/lib/room-status";
 import { addDaysISO, bedsFree, formatDate, todayISO } from "@/lib/format";
 import { AutoSubmitSelect } from "@/components/auto-submit";
 import { FloorJump, Row, RowLine, RowList, RoomPlate } from "@/components/list";
-import { Badge, Button, Card, Empty, Input, LinkButton, PageHeader, SectionTitle, Table, Td, Th } from "@/components/ui";
+import { Badge, Button, Card, Empty, Field, Input, LinkButton, PageHeader, SectionTitle, Table, Td, Th } from "@/components/ui";
+import { ActionForm } from "@/components/action-form";
+import { STAY_REQUEST_LABELS } from "@/lib/company";
+import { confirmStayRequest, declineStayRequest } from "./actions";
 
 export default async function AssignmentsPage({ searchParams }: PageProps<"/assignments">) {
   await requireStaff(CAN.manageOccupants);
@@ -18,7 +22,8 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
   const horizon = addDaysISO(today, 14);
   const db = await getDb();
 
-  const [board, unassigned, checkOuts] = await Promise.all([
+  const asker = alias(schema.staff, "asker");
+  const [board, unassigned, checkOuts, asks] = await Promise.all([
     getRoomBoard(today),
     db
       .select({ id: schema.occupants.id, fullName: schema.occupants.fullName, employeeId: schema.occupants.employeeId })
@@ -46,6 +51,15 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
         ),
       )
       .orderBy(asc(schema.roomAssignments.expectedCheckOut)),
+    db
+      .select({ s: schema.stayRequests, fullName: schema.occupants.fullName, company: schema.clients.name, roomNumber: schema.rooms.number, asker: asker.name })
+      .from(schema.stayRequests)
+      .innerJoin(schema.occupants, eq(schema.stayRequests.occupantId, schema.occupants.id))
+      .innerJoin(schema.clients, eq(schema.stayRequests.clientId, schema.clients.id))
+      .leftJoin(schema.rooms, eq(schema.stayRequests.roomId, schema.rooms.id))
+      .leftJoin(asker, eq(schema.stayRequests.requestedBy, asker.id))
+      .where(eq(schema.stayRequests.status, "pending"))
+      .orderBy(asc(schema.stayRequests.date), asc(schema.stayRequests.createdAt)),
   ]);
   const checkIns = board
     .flatMap((r) => r.upcoming.map((o) => ({ ...o, roomNumber: r.number })))
@@ -86,6 +100,63 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
           </>
         }
       />
+
+      {asks.length > 0 && (
+        <section className="mb-6">
+          <SectionTitle>Asked by companies</SectionTitle>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {asks.map(({ s, fullName, company, roomNumber, asker }) => (
+              <Card key={s.id} className="border-brand p-3 sm:p-4">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <Badge tone="amber">{STAY_REQUEST_LABELS[s.kind]}</Badge>
+                  <Link className="font-semibold underline" href={`/occupants/${s.occupantId}`}>
+                    {fullName}
+                  </Link>
+                  <span className="text-muted">{company}</span>
+                </div>
+                <p className="mt-1 text-sm">
+                  {s.kind === "move_in" ? `Into room ${roomNumber ?? "?"}${s.slot ? `, ${s.slot}` : ""} on ${formatDate(s.date)}` : `Out of room ${roomNumber ?? "?"} on ${formatDate(s.date)}`}
+                  {s.expectedCheckOut && `, until ${formatDate(s.expectedCheckOut)}`}
+                </p>
+                {s.note && <p className="mt-1 text-sm text-muted">&ldquo;{s.note}&rdquo;</p>}
+                {asker && <p className="mt-1 text-xs text-muted">Asked by {asker}</p>}
+                <ActionForm
+                  action={confirmStayRequest.bind(null, s.id)}
+                  submitLabel={s.kind === "move_in" ? "Move them in" : "Move them out"}
+                  pendingLabel="Saving…"
+                  className="mt-3 space-y-3"
+                >
+                  {s.kind === "move_in" ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label="Move-in date">
+                        <Input name="checkIn" type="date" defaultValue={s.date} required />
+                      </Field>
+                      <Field label="Bed" hint="Optional">
+                        <Input name="slot" defaultValue={s.slot ?? ""} />
+                      </Field>
+                      <Field label="Keys and cards issued" hint="e.g. 1 room key, 1 key card #0412">
+                        <Input name="keysIssued" />
+                      </Field>
+                    </div>
+                  ) : (
+                    <Field label="Moved out on" hint="Confirm on the day they leave">
+                      <Input name="date" type="date" defaultValue={s.date < today ? s.date : today} max={today} required />
+                    </Field>
+                  )}
+                </ActionForm>
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-sm text-muted underline underline-offset-2">Decline</summary>
+                  <ActionForm action={declineStayRequest.bind(null, s.id)} submitLabel="Decline" submitVariant="danger" className="mt-2 space-y-3">
+                    <Field label="Why" hint="The company sees this">
+                      <Input name="response" required maxLength={1000} />
+                    </Field>
+                  </ActionForm>
+                </details>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="mb-6 grid gap-4 lg:grid-cols-3">
         <Card>

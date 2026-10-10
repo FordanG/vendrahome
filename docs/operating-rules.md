@@ -138,3 +138,11 @@ Check room, occupant and assignment counts and representative records before sel
 
 - A tenant can rate, once each: a cleaning of their room or a finished visit to it since they moved in, and their own picked-up laundry, all within 14 days.
 - Admin and front desk see ratings. Ratings of 3 stars or fewer stay flagged until someone writes what was done; the follow-up can't be changed afterwards.
+
+## Company accounts
+
+- Company logins (company admin, company staff) belong to one company. Every page and action checks the company; hotel pages send them to `/company`, and company pages don't exist for anyone else.
+- The hotel admin creates a company's first login and sets its agreement on the company's page. Company admins add the rest of their team; nobody can remove their own company admin access.
+- Companies can't change rooms themselves. A move-in or move-out is an ask; the front desk confirms it with the usual checks (contract covers the room and date, room ready, a free bed) and confirms move-outs only on the day. One open ask per person.
+- With "approves its tenants' requests" on, a tenant's request waits for the company before the hotel sees it; urgent problems skip the wait. A decline needs a reason, which the tenant sees.
+- Hotel notes on a person stay with the hotel: companies never see or overwrite them.

@@ -20,7 +20,8 @@ const centavos = (name: string) => bigint(name, { mode: "number" });
 
 // front_desk also covers housekeeping for now.
 // tenant is an occupant's own login; it sees only their own stay.
-export const staffRole = pgEnum("staff_role", ["admin", "front_desk", "maintenance", "tenant"]);
+// company_admin and company_staff belong to one company and see only its part.
+export const staffRole = pgEnum("staff_role", ["admin", "front_desk", "maintenance", "tenant", "company_admin", "company_staff"]);
 
 // Every login lives here, staff and tenants alike.
 export const staff = pgTable("staff", {
@@ -35,6 +36,8 @@ export const staff = pgTable("staff", {
   occupantId: uuid("occupant_id")
     .unique()
     .references((): AnyPgColumn => occupants.id, { onDelete: "cascade" }),
+  // Set only for company logins: the company this login belongs to.
+  clientId: uuid("client_id").references((): AnyPgColumn => clients.id, { onDelete: "cascade" }),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -107,6 +110,10 @@ export const clients = pgTable("clients", {
   contactPhone: text("contact_phone"),
   contactEmail: text("contact_email"),
   notes: text("notes"),
+  // The agreement: what this company's own logins may do.
+  selfManagePeople: boolean("self_manage_people").notNull().default(true),
+  approveRequests: boolean("approve_requests").notNull().default(false),
+  showBilling: boolean("show_billing").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -368,6 +375,10 @@ export const tenantRequests = pgTable(
     preferredDate: date("preferred_date"),
     preferredTime: text("preferred_time"),
     status: requestStatus("status").notNull().default("pending"),
+    // The tenant's company approves requests first; the hotel doesn't see it until then.
+    awaitingCompany: boolean("awaiting_company").notNull().default(false),
+    companyReviewedBy: uuid("company_reviewed_by").references((): AnyPgColumn => staff.id, { onDelete: "set null" }),
+    companyReviewedAt: timestamp("company_reviewed_at", { withTimezone: true }),
     // What staff set when approving
     scheduledDate: date("scheduled_date"),
     scheduledFrom: text("scheduled_from"),
@@ -842,3 +853,39 @@ export type MaintenanceChecklist = typeof maintenanceChecklists.$inferSelect;
 export type ChecklistRun = typeof checklistRuns.$inferSelect;
 export type Feedback = typeof feedback.$inferSelect;
 export type FeedbackTopic = (typeof feedbackTopic.enumValues)[number];
+
+// ---------------------------------------------------------------------------
+// Company accounts ask for move-ins and move-outs; the front desk does them,
+// because the desk hands over keys and checks the room's items.
+export const stayRequestKind = pgEnum("stay_request_kind", ["move_in", "move_out"]);
+export const stayRequestStatus = pgEnum("stay_request_status", ["pending", "done", "declined", "cancelled"]);
+
+export const stayRequests = pgTable(
+  "stay_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clientId: uuid("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+    kind: stayRequestKind("kind").notNull(),
+    occupantId: uuid("occupant_id").notNull().references(() => occupants.id, { onDelete: "cascade" }),
+    // Move-ins: the room asked for. Move-outs: the room they leave.
+    roomId: uuid("room_id").references(() => rooms.id, { onDelete: "set null" }),
+    slot: text("slot"),
+    date: date("date").notNull(),
+    expectedCheckOut: date("expected_check_out"),
+    note: text("note"),
+    status: stayRequestStatus("status").notNull().default("pending"),
+    requestedBy: uuid("requested_by").references(() => staff.id, { onDelete: "set null" }),
+    handledBy: uuid("handled_by").references(() => staff.id, { onDelete: "set null" }),
+    handledAt: timestamp("handled_at", { withTimezone: true }),
+    response: text("response"),
+    assignmentId: uuid("assignment_id").references(() => roomAssignments.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("stay_requests_client_idx").on(t.clientId),
+    // One open ask per person at a time.
+    uniqueIndex("stay_requests_one_pending").on(t.occupantId).where(sql`${t.status} = 'pending'`),
+  ],
+);
+
+export type StayRequest = typeof stayRequests.$inferSelect;

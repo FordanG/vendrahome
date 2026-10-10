@@ -8,8 +8,11 @@ import { Icon, type IconName } from "@/components/icons";
 export type NavLink = { href: string; label: string; count?: number; icon?: IconName };
 export type NavGroup = { label: string; items: NavLink[] };
 
-function isActive(pathname: string, href: string, exact?: boolean) {
-  return href === "/" || exact ? pathname === href : pathname.startsWith(href);
+/** With `exact`, a portal's home tab ("/me", "/company") matches only itself; deeper tabs still match their sub-pages. */
+export function isActive(pathname: string, href: string, exact?: boolean) {
+  if (href === "/") return pathname === href;
+  if (exact) return pathname === href || (href.split("/").length > 2 && pathname.startsWith(`${href}/`));
+  return pathname.startsWith(href);
 }
 
 function CountBubble({ count, className = "" }: { count: number; className?: string }) {

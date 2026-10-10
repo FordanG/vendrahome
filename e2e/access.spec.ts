@@ -1,47 +1,55 @@
 import { expect, test, type Browser } from "@playwright/test";
-import { ADMIN, FRONT_DESK, MAINTENANCE, RESIDENT } from "./accounts";
+import { ADMIN, COMPANY_ADMIN, FRONT_DESK, MAINTENANCE, RESIDENT } from "./accounts";
 
 // Who can open what, and which personal data each role sees.
 // "open" means the page loads. "hidden" means it answers "Page not found", exactly like an
 // address that doesn't exist. Any other value is where the person is sent instead.
 
-type Role = "admin" | "desk" | "fix" | "tenant";
+type Role = "admin" | "desk" | "fix" | "tenant" | "company";
 const ACCOUNTS: Record<Role, { username: string; password: string }> = {
   admin: ADMIN,
   desk: FRONT_DESK,
   fix: MAINTENANCE,
   tenant: RESIDENT,
+  company: COMPANY_ADMIN,
 };
 
 const HIDDEN = "hidden";
 const PAGES: [string, Record<Role, string>][] = [
-  ["/", { admin: "open", desk: "open", fix: "open", tenant: "/me" }],
-  ["/rooms", { admin: "open", desk: "open", fix: "open", tenant: "/me" }],
-  ["/requests", { admin: "open", desk: "open", fix: "open", tenant: "/me" }],
-  ["/maintenance", { admin: "open", desk: "open", fix: "open", tenant: "/me" }],
-  ["/schedules", { admin: "open", desk: "open", fix: "open", tenant: "/me" }],
-  ["/house-rules", { admin: "open", desk: "open", fix: "open", tenant: "/me" }],
-  ["/account", { admin: "open", desk: "open", fix: "open", tenant: "/me" }],
-  ["/occupants", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me" }],
-  ["/occupants/new", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me" }],
-  ["/assignments", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me" }],
-  ["/assignments/import", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me" }],
-  ["/contracts", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me" }],
-  ["/contracts/new", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me" }],
-  ["/clients", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me" }],
-  ["/clients/new", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me" }],
-  ["/audit", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me" }],
-  ["/billing", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me" }],
-  ["/billing/utilities", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me" }],
-  ["/billing/settings", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me" }],
-  ["/inventory", { admin: "open", desk: "open", fix: "open", tenant: "/me" }],
-  ["/inventory/rooms/storeroom", { admin: "open", desk: "open", fix: "open", tenant: "/me" }],
-  ["/inventory/templates", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me" }],
-  ["/staff", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me" }],
-  ["/me", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: "open" }],
-  ["/me/requests", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: "open" }],
-  ["/me/rules", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: "open" }],
-  ["/me/account", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: "open" }],
+  ["/", { admin: "open", desk: "open", fix: "open", tenant: "/me", company: "/company" }],
+  ["/rooms", { admin: "open", desk: "open", fix: "open", tenant: "/me", company: "/company" }],
+  ["/requests", { admin: "open", desk: "open", fix: "open", tenant: "/me", company: "/company" }],
+  ["/maintenance", { admin: "open", desk: "open", fix: "open", tenant: "/me", company: "/company" }],
+  ["/schedules", { admin: "open", desk: "open", fix: "open", tenant: "/me", company: "/company" }],
+  ["/house-rules", { admin: "open", desk: "open", fix: "open", tenant: "/me", company: "/company" }],
+  ["/account", { admin: "open", desk: "open", fix: "open", tenant: "/me", company: "/company" }],
+  ["/occupants", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/occupants/new", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/assignments", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/assignments/import", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/contracts", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/contracts/new", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/clients", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/clients/new", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/audit", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/billing", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/billing/utilities", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/billing/settings", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/inventory", { admin: "open", desk: "open", fix: "open", tenant: "/me", company: "/company" }],
+  ["/inventory/rooms/storeroom", { admin: "open", desk: "open", fix: "open", tenant: "/me", company: "/company" }],
+  ["/inventory/templates", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/staff", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/me", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: "open", company: HIDDEN }],
+  ["/me/requests", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: "open", company: HIDDEN }],
+  ["/me/rules", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: "open", company: HIDDEN }],
+  ["/me/account", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: "open", company: HIDDEN }],
+  ["/company", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: HIDDEN, company: "open" }],
+  ["/company/people", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: HIDDEN, company: "open" }],
+  ["/company/people/new", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: HIDDEN, company: "open" }],
+  ["/company/requests", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: HIDDEN, company: "open" }],
+  ["/company/billing", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: HIDDEN, company: "open" }],
+  ["/company/team", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: HIDDEN, company: "open" }],
+  ["/company/account", { admin: HIDDEN, desk: HIDDEN, fix: HIDDEN, tenant: HIDDEN, company: "open" }],
 ];
 
 async function signIn(browser: Browser, role: Role) {

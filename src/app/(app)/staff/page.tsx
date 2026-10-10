@@ -1,4 +1,4 @@
-import { asc, ne } from "drizzle-orm";
+import { asc, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff, ROLE_LABELS, STAFF_ROLES } from "@/lib/auth";
 import { ActionForm } from "@/components/action-form";
@@ -20,11 +20,11 @@ function RoleSelect({ defaultValue }: { defaultValue?: string }) {
 export default async function StaffPage() {
   await requireStaff(CAN.manageStaff);
   const db = await getDb();
-  // Tenant logins are managed on each occupant's page.
+  // Tenant logins are managed on each occupant's page, company logins on each company's page.
   const staff = await db
     .select()
     .from(schema.staff)
-    .where(ne(schema.staff.role, "tenant"))
+    .where(inArray(schema.staff.role, STAFF_ROLES))
     .orderBy(asc(schema.staff.name));
 
   return (

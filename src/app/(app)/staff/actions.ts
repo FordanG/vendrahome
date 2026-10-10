@@ -48,7 +48,7 @@ export async function updateStaff(id: string, _: ActionState, fd: FormData): Pro
     if (password && password.length < MIN_PASSWORD) return { error: `Password must be at least ${MIN_PASSWORD} characters.` };
     const db = await getDb();
     const target = await db.query.staff.findFirst({ where: eq(schema.staff.id, id) });
-    if (!target || target.role === "tenant") return { error: "Staff account not found." };
+    if (!target || !STAFF_ROLES.includes(target.role)) return { error: "Staff account not found." };
     if (id === user.id && (!active || role !== "admin")) {
       return { error: "You can't remove your own admin access." };
     }

@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { mutate } from "@/lib/mutations";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN, requireStaff, STAFF_ROLES } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { formatPeso, isHHMM, isISODate, parsePeso, str, todayISO } from "@/lib/format";
 import { addServiceCharge } from "@/lib/billing";
@@ -31,13 +31,14 @@ export async function updateRequest(id: string, _: ActionState, fd: FormData): P
     const request = await db.query.tenantRequests.findFirst({ where: eq(schema.tenantRequests.id, id) });
     if (!request || !canHandleRequest(user, request)) return { error: "You cannot handle this request." };
     if (request.cancelledAt) return { error: "The tenant withdrew this request. Create a new request if needed." };
+    if (request.awaitingCompany) return { error: "This request is still waiting for the tenant's company to approve it." };
     if (request.kind !== "issue" && status === "approved" && !scheduledDate) return { error: "Set the date you're approving." };
     const assigneeId = user.role === "maintenance" ? user.id : fd.has("assigneeId") ? str(fd.get("assigneeId")) : request.assigneeId;
     const dueDate = fd.has("dueDate") ? str(fd.get("dueDate")) : request.dueDate;
     if (dueDate && !isISODate(dueDate)) return { error: "Enter a valid due date." };
     if (assigneeId) {
       const owner = await db.query.staff.findFirst({ where: eq(schema.staff.id, assigneeId) });
-      if (!owner?.active || owner.role === "tenant" || (request.kind === "laundry" && owner.role === "maintenance"))
+      if (!owner?.active || !STAFF_ROLES.includes(owner.role) || (request.kind === "laundry" && owner.role === "maintenance"))
         return { error: "Choose an active staff member who can handle this kind of work." };
     }
     const keepAppointment = status === "approved" || status === "done";

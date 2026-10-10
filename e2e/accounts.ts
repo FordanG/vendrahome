@@ -11,3 +11,8 @@ export const TENANT = { name: "Juan Dela Cruz", nickname: "Juan", room: "203", u
 
 // A second tenant who already has a login, used by the access tests.
 export const RESIDENT = { name: "Rosa Mendoza", room: "305", username: "rosa", password: "e2e-rosa-pass" };
+
+// The company admin of "E2E Company", which leases every room.
+export const COMPANY_ADMIN = { username: "hr", password: "e2e-hr-pass" };
+// A second company with no rooms, to check one company never sees another's people.
+export const OTHER_COMPANY = { name: "Other Company", person: "Olga Outsider", username: "other.hr", password: "e2e-other-pass" };

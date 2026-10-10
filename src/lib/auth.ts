@@ -76,8 +76,12 @@ export const getCurrentStaff = cache(async (): Promise<Staff | null> => {
   return row.staff;
 });
 
-/** Roles that work at the hotel. Tenants are left out on purpose. */
+/** Roles that work at the hotel. Tenants and company logins are left out on purpose. */
 export const STAFF_ROLES: StaffRole[] = ["admin", "front_desk", "maintenance"];
+
+/** Logins that belong to one company and see only that company's part of the hotel. */
+export const COMPANY_ROLES: StaffRole[] = ["company_admin", "company_staff"];
+export const isCompanyRole = (role: StaffRole) => COMPANY_ROLES.includes(role);
 
 /** Any signed-in account, staff or tenant. */
 export async function requireUser(): Promise<Staff> {
@@ -94,12 +98,33 @@ export async function requireUser(): Promise<Staff> {
 export async function requireStaff(roles: StaffRole[] = STAFF_ROLES): Promise<Staff> {
   const user = await requireUser();
   if (user.role === "tenant") redirect("/me");
+  if (isCompanyRole(user.role)) redirect("/company");
   if (!roles.includes(user.role)) notFound();
   return user;
 }
 
-/** Where each account starts: tenants on their own page, staff on the room board. */
-export const homeFor = (user: Pick<Staff, "role">) => (user.role === "tenant" ? "/me" : "/");
+/** Where each account starts: tenants and companies on their own pages, staff on the room board. */
+export const homeFor = (user: Pick<Staff, "role">) =>
+  user.role === "tenant" ? "/me" : isCompanyRole(user.role) ? "/company" : "/";
+
+const companyLogin = cache(async () => {
+  const user = await requireUser();
+  if (!isCompanyRole(user.role) || !user.clientId) notFound();
+  const db = await getDb();
+  const client = await db.query.clients.findFirst({ where: eq(schema.clients.id, user.clientId) });
+  if (!client) redirect("/login");
+  return { user, client };
+});
+
+/**
+ * Use in company pages and actions. Returns the login and its company; every
+ * query must stay within `client.id`. Anyone else gets a page that doesn't exist.
+ */
+export async function requireCompany(roles: StaffRole[] = COMPANY_ROLES) {
+  const login = await companyLogin();
+  if (!roles.includes(login.user.role)) notFound();
+  return login;
+}
 
 /** Use in tenant pages and actions. Returns the login and the occupant it belongs to. */
 export const requireTenant = cache(async () => {
@@ -120,6 +145,8 @@ export const ROLE_LABELS: Record<StaffRole, string> = {
   front_desk: "Front desk & housekeeping",
   maintenance: "Maintenance",
   tenant: "Tenant",
+  company_admin: "Company admin",
+  company_staff: "Company staff",
 };
 
 // Who can do what. Pages and actions check these lists.
@@ -160,4 +187,13 @@ export const CAN = {
   // Inventory: everyone who works on rooms checks items; the office adds, moves and retires them.
   viewInventory: ["admin", "front_desk", "maintenance"] as StaffRole[],
   manageInventory: ["admin", "front_desk"] as StaffRole[],
+  // Company accounts: the admin sets each company's agreement and its first logins.
+  manageCompanyAccounts: ["admin"] as StaffRole[],
+};
+
+// What company logins can do inside their own company. The agreement on the
+// company (selfManagePeople, approveRequests, showBilling) narrows this further.
+export const COMPANY_CAN = {
+  manageTeam: ["company_admin"] as StaffRole[],
+  viewBilling: ["company_admin"] as StaffRole[],
 };

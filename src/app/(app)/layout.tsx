@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { and, count, eq } from "drizzle-orm";
 import { requestScope } from "@/lib/service-work";
 import { getDb, schema } from "@/db";
-import { requireStaff, ROLE_LABELS, signOut } from "@/lib/auth";
+import { CAN, requireStaff, ROLE_LABELS, signOut } from "@/lib/auth";
 import type { StaffRole } from "@/db/schema";
 import type { IconName } from "@/components/icons";
 import { Brand } from "@/components/brand";
@@ -67,16 +67,18 @@ async function logout() {
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireStaff();
   const db = await getDb();
-  const [{ waiting }] = await db
-    .select({ waiting: count() })
-    .from(schema.tenantRequests)
-    .where(and(eq(schema.tenantRequests.status, "pending"), requestScope(user)));
+  const [[{ waiting }], [{ asks }]] = await Promise.all([
+    db.select({ waiting: count() }).from(schema.tenantRequests).where(and(eq(schema.tenantRequests.status, "pending"), requestScope(user))),
+    CAN.manageOccupants.includes(user.role)
+      ? db.select({ asks: count() }).from(schema.stayRequests).where(eq(schema.stayRequests.status, "pending"))
+      : Promise.resolve([{ asks: 0 }]),
+  ]);
 
   const groups: NavGroup[] = NAV.map((g) => ({
     label: g.label,
     items: g.items
       .filter((n) => !n.roles || n.roles.includes(user.role))
-      .map(({ href, label, icon }) => ({ href, label, icon, count: href === "/requests" ? waiting : undefined })),
+      .map(({ href, label, icon }) => ({ href, label, icon, count: href === "/requests" ? waiting : href === "/assignments" ? asks : undefined })),
   })).filter((g) => g.items.length > 0);
 
   const allowed = groups.flatMap((g) => g.items);

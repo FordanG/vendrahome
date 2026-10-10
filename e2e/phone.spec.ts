@@ -1,5 +1,5 @@
 import { expect, test, type Browser } from "@playwright/test";
-import { ADMIN, MAINTENANCE, RESIDENT } from "./accounts";
+import { ADMIN, COMPANY_ADMIN, MAINTENANCE, RESIDENT } from "./accounts";
 
 // The app is used mostly on phones: every page fits the screen width (no sideways
 // scrolling), and the tab bar at the bottom reaches every page a role can open.
@@ -76,4 +76,13 @@ test("phone: tenant pages fit the screen", async ({ browser }) => {
   const pages = await allNavPages(page);
   expect(pages).toEqual(["/me", "/me/requests", "/me/rules", "/me/account"]);
   for (const path of pages) await expectFitsScreen(page, path);
+});
+
+test("phone: company pages fit the screen", async ({ browser }) => {
+  const page = await signIn(browser, COMPANY_ADMIN);
+  const pages = await allNavPages(page);
+  expect(pages).toEqual(["/company", "/company/people", "/company/requests", "/company/account", "/company/billing", "/company/team"]);
+  for (const path of [...pages, "/company/people/new"]) await expectFitsScreen(page, path);
+  await page.goto("/company/people");
+  await expectFitsScreen(page, (await page.locator("main a[href^='/company/people/']").last().getAttribute("href"))!);
 });

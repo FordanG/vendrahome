@@ -5,7 +5,7 @@ import { mutate } from "@/lib/mutations";
 import { revalidatePath } from "next/cache";
 import { eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN, requireStaff, STAFF_ROLES } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { isHHMM, isISODate, str } from "@/lib/format";
 import { syncVisitRequest, visitPermission } from "@/lib/service-work";
@@ -25,7 +25,7 @@ function readWhen(fd: FormData) {
 async function validAssignee(id: string | null) {
   if (!id) return true;
   const owner = await (await getDb()).query.staff.findFirst({ where: eq(schema.staff.id, id) });
-  return !!owner?.active && owner.role !== "tenant";
+  return !!owner?.active && STAFF_ROLES.includes(owner.role);
 }
 
 function refresh() {

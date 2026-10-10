@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { NavLink } from "../(app)/nav-links";
+import { isActive, type NavLink } from "../(app)/nav-links";
 
-/** Tenant tabs under the header on wide screens. Phones use the bottom tab bar. */
+/** Tenant and company tabs under the header on wide screens. Phones use the bottom tab bar. */
 export function TopTabs({ items }: { items: NavLink[] }) {
   const pathname = usePathname();
   return (
     <nav className="hidden gap-1 px-4 md:flex">
       {items.map((item) => {
-        const active = pathname === item.href;
+        const active = isActive(pathname, item.href, true);
         return (
           <Link
             key={item.href}
@@ -23,6 +23,7 @@ export function TopTabs({ items }: { items: NavLink[] }) {
             }`}
           >
             {item.label}
+            {!!item.count && <span className="ml-1.5 rounded-full bg-brand px-1.5 text-xs font-semibold text-brand-foreground">{item.count}</span>}
           </Link>
         );
       })}
