@@ -12,6 +12,7 @@ import { isISODate, str, todayISO } from "@/lib/format";
 import { getCurrentStay } from "@/lib/portal";
 import { createClaim } from "@/lib/laundry";
 import { savePhoto } from "@/lib/photos";
+import { toRate } from "@/lib/feedback";
 import type { ActionState } from "@/lib/action-state";
 import type { TenantRequest } from "@/db/schema";
 
@@ -96,5 +97,25 @@ export async function reportLaundryClaim(loadId: string, _: ActionState, fd: For
     revalidatePath("/me/laundry");
     revalidatePath("/laundry");
     return { ok: "Sent. The front desk will follow up with the shop." };
+  });
+}
+
+/** A tenant rates a cleaning of their room, a repair visit or a laundry load, once each. */
+export async function rateService(subjectId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  return mutate(async () => {
+    const { user, occupant } = await requireTenant();
+    const stars = Number(fd.get("stars"));
+    const comment = str(fd.get("comment"));
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5) return { error: "Pick from 1 to 5 stars." };
+    if (comment && comment.length > 1000) return { error: "Please keep it under 1,000 characters." };
+    const stay = await getCurrentStay(occupant.id);
+    const item = (await toRate(occupant.id, stay ? { roomId: stay.room.id, checkIn: stay.a.checkIn } : null)).find((i) => i.subjectId === subjectId);
+    if (!item) return { error: "This can't be rated any more." };
+    const db = await getDb();
+    await db.insert(schema.feedback).values({ occupantId: occupant.id, topic: item.topic, subjectId, roomId: item.roomId, stars, comment });
+    await audit(user.id, "rate", "feedback", subjectId, { topic: item.topic, stars });
+    revalidatePath("/me");
+    revalidatePath("/feedback");
+    return { ok: stars <= 3 ? "Thanks. The front desk will follow up." : "Thanks for letting us know." };
   });
 }

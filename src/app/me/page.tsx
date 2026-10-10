@@ -2,10 +2,12 @@ import Link from "next/link";
 import { and, asc, desc, eq, gte, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireTenant } from "@/lib/auth";
-import { formatDate, formatPeso, formatTimeRange, todayISO } from "@/lib/format";
+import { formatDate, formatPeso, formatTimeRange, todayISO, manilaDate } from "@/lib/format";
 import { occupantAccount } from "@/lib/billing";
 import { roomCleaning } from "@/lib/housekeeping";
 import { LAUNDRY_STATUS_LABELS, loadLabel } from "@/lib/laundry";
+import { toRate } from "@/lib/feedback";
+import { RateForm } from "./rate-form";
 import {
   appliesToRoom,
   getCurrentStay,
@@ -38,6 +40,7 @@ export default async function TenantHomePage() {
     occupantAccount(occupant.id),
   ]);
   const cleaning = stay ? await roomCleaning(stay.room.id, today) : null;
+  const rateable = (await toRate(occupant.id, stay ? { roomId: stay.room.id, checkIn: stay.a.checkIn } : null)).slice(0, 3);
   // Bags not picked up yet.
   const laundry = await db
     .select()
@@ -94,6 +97,17 @@ export default async function TenantHomePage() {
         ) : (
           <Card>
             <p className="text-sm text-muted">You don&apos;t have a room assigned right now. Please talk to the front desk.</p>
+          </Card>
+        )}
+
+        {rateable.length > 0 && (
+          <Card className="border-brand">
+            <SectionTitle>How did we do?</SectionTitle>
+            <div className="divide-y divide-border">
+              {rateable.map((item) => (
+                <RateForm key={item.subjectId} subjectId={item.subjectId} label={`${item.label}, ${formatDate(manilaDate(item.when))}`} />
+              ))}
+            </div>
           </Card>
         )}
 

@@ -43,7 +43,8 @@ const { cleaningsDue } = require('../src/lib/housekeeping.ts');
 const laundry = require('../src/app/(app)/laundry/actions.ts');
 const checklists = require('../src/app/(app)/maintenance/checklists/actions.ts');
 const { checklistsDue } = require('../src/lib/checklists.ts');
-const { reportLaundryClaim } = require('../src/app/me/actions.ts');
+const { reportLaundryClaim, rateService } = require('../src/app/me/actions.ts');
+const feedbackActions = require('../src/app/(app)/feedback/actions.ts');
 const { importOccupants } = require('../src/app/(app)/assignments/import/actions.ts');
 const { cancelRequest, createRequest } = require('../src/app/me/actions.ts');
 const { changeOwnPassword } = require('../src/app/(app)/staff/actions.ts');
@@ -474,4 +475,21 @@ test('maintenance checklists: start from the door, every item answered, problems
   assert.equal(raised.length,1); assert.match(raised[0].details,/Lights\. Bulb out by the door/); assert.equal(raised[0].assigneeId,fix.id);
   assert.equal(await dueFor(),addDaysISO(today,30));
   assert.ok((await actors.run(fix,()=>checklists.saveRun(runRow.id,{},fd({result_0:'ok'})))).error, 'finished runs are fixed');
+});
+test('feedback: tenants rate their own room cleaning once; low ratings need a follow-up', async () => {
+  const r=await room(); const p=await person(); await assign(p,r); const other=await room();
+  const [tenant]=await db.insert(schema.staff).values({name:p.fullName,username:`rate.tenant${++serial}`,role:'tenant',occupantId:p.id,passwordHash:'unused'}).returning();
+  const [mine,theirs]=await db.insert(schema.cleanings).values([
+    {roomId:r.id,staffId:admin.id,finishedAt:new Date()},
+    {roomId:other.id,staffId:admin.id,finishedAt:new Date()},
+  ]).returning();
+  assert.ok((await actors.run(tenant,()=>rateService(theirs.id,{},fd({stars:'5'})))).error, 'not their room');
+  assert.ok((await actors.run(tenant,()=>rateService(mine.id,{},fd({stars:'6'})))).error);
+  assert.ok((await actors.run(tenant,()=>rateService(mine.id,{},fd({stars:'2',comment:'Bathroom skipped'})))).ok);
+  assert.ok((await actors.run(tenant,()=>rateService(mine.id,{},fd({stars:'5'})))).error, 'once');
+  const f=await db.query.feedback.findFirst({where:eq(schema.feedback.subjectId,mine.id)});
+  assert.equal(f.topic,'cleaning'); assert.equal(f.roomId,r.id);
+  await assert.rejects(()=>actors.run(fix,()=>feedbackActions.followUp(f.id,{},fd({followUp:'x'}))));
+  assert.ok((await run(feedbackActions.followUp,f.id,{},fd({followUp:'Re-cleaned the bathroom'}))).ok);
+  assert.ok((await run(feedbackActions.followUp,f.id,{},fd({followUp:'Again'}))).error);
 });

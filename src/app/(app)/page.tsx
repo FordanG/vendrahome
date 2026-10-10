@@ -115,9 +115,9 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
           {waiting > 0 && (
             <li className="border-l-4 border-l-brand px-4 py-3 sm:py-2.5">
               <Link className="font-medium underline underline-offset-2" href="/requests?view=pending">
-                {waiting} tenant request{waiting === 1 ? "" : "s"}
+                {waiting} new request{waiting === 1 ? "" : "s"}
               </Link>{" "}
-              waiting for a reply.
+              waiting to be handled.
             </li>
           )}
           {endingContracts.map((c) => (

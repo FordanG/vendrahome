@@ -8,7 +8,7 @@ import { addDaysISO, daysBetween, manilaDate } from "./format";
 export const RESULT_LABELS: Record<NonNullable<ChecklistResult["result"]>, string> = {
   ok: "OK",
   fail: "Problem",
-  na: "Not in this room",
+  na: "Not here",
 };
 
 export type ChecklistDue = { roomId: string; number: string; floor: number; lastDone: string | null; due: string; daysLate: number };

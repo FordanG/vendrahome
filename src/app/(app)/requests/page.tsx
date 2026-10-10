@@ -205,7 +205,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                 {canHandle && (
                   <details className="group mt-3">
                     <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium hover:border-accent/40 group-open:border-accent/40 group-open:bg-background">
-                      {r.status === "pending" ? (r.kind === "issue" ? "Reply" : "Approve or decline") : "Update"}
+                      {r.status === "pending" && r.occupantId ? (r.kind === "issue" ? "Reply" : "Approve or decline") : "Update"}
                     </summary>
                     <div className="mt-3 rounded-lg border border-border p-3">
                       <ActionForm action={updateRequest.bind(null, r.id)}>
@@ -235,7 +235,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                           <Field label="To">
                             <Input name="timeTo" type="time" defaultValue={r.scheduledTo ?? ""} />
                           </Field>
-                          <Field label="Reply to the tenant" hint="They see this in the app" className="sm:col-span-2">
+                          <Field label={r.occupantId ? "Reply to the tenant" : "Note"} hint={r.occupantId ? "They see this in the app" : undefined} className="sm:col-span-2">
                             <Input name="response" defaultValue={r.response ?? ""} />
                           </Field>
                         </FormGrid>

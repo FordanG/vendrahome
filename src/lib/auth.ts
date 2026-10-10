@@ -148,6 +148,8 @@ export const CAN = {
   // Maintenance checklists: anyone who does visits runs them; the admin writes them.
   runChecklists: ["admin", "front_desk", "maintenance"] as StaffRole[],
   manageMaintenanceChecklists: ["admin"] as StaffRole[],
+  // Tenant ratings of cleanings, repairs and laundry, and following up on low ones.
+  viewFeedback: ["admin", "front_desk"] as StaffRole[],
   // Shared spaces with their own door code.
   manageAreas: ["admin"] as StaffRole[],
   // Billing: front desk sees accounts, takes payments and adds charges; the admin

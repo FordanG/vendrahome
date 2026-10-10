@@ -160,7 +160,7 @@ test("tenant portal", async ({ browser }) => {
 
   await test.step("staff see the waiting request and approve it", async () => {
     await admin.goto("/");
-    await expect(admin.getByText("1 tenant request")).toBeVisible();
+    await expect(admin.getByText("1 new request")).toBeVisible();
     await admin.goto("/requests");
     await expect(admin.getByText("Toilet flush is weak, please check.")).toBeVisible();
     await admin.getByText("Approve or decline").click();

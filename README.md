@@ -90,8 +90,11 @@ It starts its own server on port 3456 with a fresh database in `.data/e2e` and b
 - Shared-space codes: the admin adds places like the kitchen or laundry area on the door codes page. Tenants who scan one report a problem there; staff who scan one see what's open there.
 - Housekeeping (`/housekeeping`): how often each room is cleaned (by room, floor, type or every room), rooms due and overdue by floor, cleanings in progress and the last week's, and the admin's cleaning checklist. A cleaning starts from the door code and is ticked off step by step. Room pages and the tenant's home page show the next cleaning.
 - Laundry (`/laundry`): tenants drop bags at the front desk; each load gets a number for its tag. The desk sends ticked bags to the shop with a printable list (`/laundry/handoff`), enters the kilos from the shop's slip when they come back (which adds the charge at the service's price per kilo, with an optional minimum, billed by the contract's Laundry rule), and marks them picked up. Tenants follow their loads on `/me/laundry` and can report something missing or damaged within 7 days, with a photo; the desk closes each claim with how it was settled. The admin sets services, prices and the shop's cost (`/laundry/settings`) and sees the month's margin.
+- Staff reports and repair costs: staff report a problem in a room from Requests or the door code, with a photo; tenants can add a photo too. Each request can record what the repair cost and who pays: the hotel, or a Damage charge to the company or tenant (charged once).
+- Maintenance checklists (`/maintenance/checklists`): the admin writes checklists (a monthly room check and a safety check to start) that repeat for every room on their own cycle. Staff run them from the door code or the room page; each problem becomes a request for the room. Rooms due and overdue show per checklist.
+- Feedback (`/feedback`): tenants rate a cleaning of their room, a repair visit or a laundry load from the last two weeks, from their home page. Ratings of 3 stars or fewer stay flagged until the office writes a follow-up; 30-day averages per topic.
 
-Next: recurring maintenance checklists, feedback, repair cost and who pays, photos on tenant reports. Moving to Supabase for shared hosting.
+Not yet: hosting, backups and the public address (`APP_URL`). After the first version: reminders, taxes, monthly reports, supplies, and a page for the leasing company. Moving to Supabase for shared hosting.
 
 
 ## Account profiles

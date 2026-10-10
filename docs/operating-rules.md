@@ -1,6 +1,6 @@
 # Operating rules and rollout
 
-These corrections address the 3 October 2026 platform review. Billing and room inventory were added afterwards (see their sections below); door codes, housekeeping and laundry were added after that.
+These corrections address the 3 October 2026 platform review. Billing and room inventory were added afterwards (see their sections below); door codes, housekeeping, laundry, maintenance checklists, repair costs and feedback were added after that.
 
 ## Rooms and stays
 
@@ -121,3 +121,20 @@ Check room, occupant and assignment counts and representative records before sel
 - Price changes apply to loads weighed afterwards.
 - Tenants can report something missing or damaged up to 7 days after a load comes back; the desk can record one at any time. Claim photos are seen by the desk and whoever took them. The settlement note is shown to the tenant.
 - The weekly laundry times on the Kitchen & laundry page now mean when the shop collects from the desk. Tenants can no longer ask for a different pickup day.
+
+## Requests from staff and repair costs
+
+- Any staff role can report a problem in a room; it joins Requests with no tenant attached and shows who reported it. Maintenance staff who report one are assigned it.
+- A repair's cost can be recorded by whoever handles the request. Charging it to the company or the tenant (as a Damage charge) is for the front desk and admin only, and happens once; a wrong charge is reversed in Billing. A staff-reported problem can't be charged to a tenant.
+
+## Maintenance checklists
+
+- Only the admin adds or changes checklists. Admin, front desk and maintenance run them.
+- A checklist is due in a room its cycle after it was last finished there, or today if never. A room has at most one unfinished run of each checklist.
+- Every item needs an answer to finish, and a problem needs a note. Each problem becomes a request for the room.
+- A run started from the room page without scanning is flagged as not scanned.
+
+## Feedback
+
+- A tenant can rate, once each: a cleaning of their room or a finished visit to it since they moved in, and their own picked-up laundry, all within 14 days.
+- Admin and front desk see ratings. Ratings of 3 stars or fewer stay flagged until someone writes what was done; the follow-up can't be changed afterwards.
