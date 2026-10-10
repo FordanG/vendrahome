@@ -9,7 +9,8 @@ import { REQUEST_STATUS_TONES, requestStatusLabel } from "@/lib/portal";
 import { visitPermission } from "@/lib/service-work";
 import { ActionForm } from "@/components/action-form";
 import { Brand } from "@/components/brand";
-import { Badge, Card, LinkButton, SectionTitle } from "@/components/ui";
+import { Badge, Card, Field, Input, LinkButton, SectionTitle, Textarea } from "@/components/ui";
+import { reportProblem } from "@/app/(app)/requests/actions";
 import type { Area, CheckInPurpose, Room, Staff } from "@/db/schema";
 import { checkIn, finishVisit, startCleaning, startItemsCheck, type DoorCheck } from "./actions";
 
@@ -219,6 +220,26 @@ async function RoomView({ room, token, user }: { room: Room; token: string; user
         </Card>
       )}
 
+      {CAN.handleRequests.includes(user.role) && (
+        <Card>
+          <details>
+            <summary className="cursor-pointer text-[15px] font-semibold">Found a problem in this room?</summary>
+            <ActionForm action={reportProblem} submitLabel="Report it" pendingLabel="Sending…" resetOnSuccess className="mt-3 space-y-3">
+              <input type="hidden" name="roomId" value={room.id} />
+              <Field label="What's wrong">
+                <Textarea name="details" rows={2} required maxLength={2000} />
+              </Field>
+              <Field label="Photo" hint="Optional">
+                <Input name="photo" type="file" accept="image/*" />
+              </Field>
+              <label className="flex min-h-11 items-center gap-2.5 text-sm">
+                <input type="checkbox" name="urgent" /> Urgent
+              </label>
+            </ActionForm>
+          </details>
+        </Card>
+      )}
+
       {checkIns.length > 0 && (
         <Card>
           <SectionTitle>Checked in here today</SectionTitle>
@@ -249,7 +270,7 @@ async function AreaView({ area }: { area: Area }) {
   const reports = await db
     .select({ r: schema.tenantRequests, name: schema.occupants.fullName })
     .from(schema.tenantRequests)
-    .innerJoin(schema.occupants, eq(schema.tenantRequests.occupantId, schema.occupants.id))
+    .leftJoin(schema.occupants, eq(schema.tenantRequests.occupantId, schema.occupants.id))
     .where(and(eq(schema.tenantRequests.areaId, area.id), inArray(schema.tenantRequests.status, ["pending", "approved"])))
     .orderBy(desc(schema.tenantRequests.urgent), desc(schema.tenantRequests.createdAt));
   return (

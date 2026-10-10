@@ -37,7 +37,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
     db
       .select({ r: schema.tenantRequests, name: schema.occupants.fullName })
       .from(schema.tenantRequests)
-      .innerJoin(schema.occupants, eq(schema.tenantRequests.occupantId, schema.occupants.id))
+      .leftJoin(schema.occupants, eq(schema.tenantRequests.occupantId, schema.occupants.id))
       .where(and(eq(schema.tenantRequests.roomId, id), inArray(schema.tenantRequests.status, ["pending", "approved"]), requestScope(user)))
       .orderBy(desc(schema.tenantRequests.urgent), desc(schema.tenantRequests.createdAt)),
     roomCleaning(id, today),
@@ -163,7 +163,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
                       <span className="font-medium">{REQUEST_KIND_LABELS[r.kind]}</span>
                       <Badge tone={REQUEST_STATUS_TONES[r.status]}>{requestStatusLabel(r)}</Badge>
                       {r.urgent && <Badge tone="red">Urgent</Badge>}
-                      <span className="text-muted">from {name}</span>
+                      <span className="text-muted">{name ? `from ${name}` : "reported by staff"}</span>
                     </div>
                     <p className="mt-1">{r.details}</p>
                   </li>

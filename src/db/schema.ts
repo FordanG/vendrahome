@@ -348,15 +348,17 @@ export const cleanings = pgTable(
 // issue: something wrong in the unit. maintenance and laundry: asking for a
 // time outside the regular schedule, which staff approve or decline.
 export const requestKind = pgEnum("request_kind", ["issue", "maintenance", "laundry"]);
+export const repairPayer = pgEnum("repair_payer", ["hotel", "company", "occupant"]);
 export const requestStatus = pgEnum("request_status", ["pending", "approved", "declined", "done"]);
 
 export const tenantRequests = pgTable(
   "tenant_requests",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    occupantId: uuid("occupant_id")
-      .notNull()
-      .references(() => occupants.id, { onDelete: "cascade" }),
+    // The tenant who asked. Empty when staff reported it, e.g. from a cleaning or a checklist.
+    occupantId: uuid("occupant_id").references(() => occupants.id, { onDelete: "cascade" }),
+    reportedBy: uuid("reported_by").references((): AnyPgColumn => staff.id, { onDelete: "set null" }),
+    photoId: uuid("photo_id").references((): AnyPgColumn => photos.id),
     roomId: uuid("room_id").references(() => rooms.id, { onDelete: "set null" }),
     // Set instead of the room when the problem is in a shared space.
     areaId: uuid("area_id").references(() => areas.id, { onDelete: "set null" }),
@@ -376,6 +378,10 @@ export const tenantRequests = pgTable(
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   handledBy: uuid("handled_by").references(() => staff.id, { onDelete: "set null" }),
     handledAt: timestamp("handled_at", { withTimezone: true }),
+    // What the repair cost (parts and labour) and who pays it. A company or tenant payer gets a charge.
+    cost: centavos("cost"),
+    paidBy: repairPayer("paid_by"),
+    chargeId: uuid("charge_id").references((): AnyPgColumn => charges.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("requests_status_idx").on(t.status), index("requests_occupant_idx").on(t.occupantId)],
@@ -384,7 +390,7 @@ export const tenantRequests = pgTable(
 // ---------------------------------------------------------------------------
 // Photos: bills, payment proofs and room items. Stored re-encoded (WebP, no
 // metadata) like profile photos. `scope` decides which roles may open them.
-export const photoScope = pgEnum("photo_scope", ["billing", "inventory", "laundry"]);
+export const photoScope = pgEnum("photo_scope", ["billing", "inventory", "laundry", "request"]);
 
 export const photos = pgTable("photos", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -772,3 +778,67 @@ export type LaundryService = typeof laundryServices.$inferSelect;
 export type LaundryLoad = typeof laundryLoads.$inferSelect;
 export type LaundryStatus = (typeof laundryStatus.enumValues)[number];
 export type LaundryClaim = typeof laundryClaims.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Recurring maintenance checklists (aircon filter, smoke detector...), each on
+// its own cycle for every room. A failed item becomes a staff-reported request.
+export const maintenanceChecklists = pgTable("maintenance_checklists", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  everyDays: integer("every_days").notNull(),
+  items: jsonb("items").$type<string[]>().notNull().default([]),
+  active: boolean("active").notNull().default(true),
+});
+
+export type ChecklistResult = { label: string; result: "ok" | "fail" | "na" | null; note: string | null };
+
+export const checklistRuns = pgTable(
+  "checklist_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    roomId: uuid("room_id")
+      .notNull()
+      .references(() => rooms.id, { onDelete: "cascade" }),
+    checklistId: uuid("checklist_id")
+      .notNull()
+      .references(() => maintenanceChecklists.id, { onDelete: "cascade" }),
+    staffId: uuid("staff_id").references(() => staff.id, { onDelete: "set null" }),
+    checkInId: uuid("check_in_id").references(() => roomCheckIns.id, { onDelete: "set null" }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    // A copy of the items when it started, with what was found.
+    results: jsonb("results").$type<ChecklistResult[]>().notNull().default([]),
+  },
+  (t) => [index("checklist_runs_room_idx").on(t.roomId, t.checklistId)],
+);
+
+// ---------------------------------------------------------------------------
+// Tenants rate a cleaning of their room, a repair visit or a laundry load.
+export const feedbackTopic = pgEnum("feedback_topic", ["cleaning", "repair", "laundry"]);
+
+export const feedback = pgTable(
+  "feedback",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    occupantId: uuid("occupant_id")
+      .notNull()
+      .references(() => occupants.id, { onDelete: "cascade" }),
+    topic: feedbackTopic("topic").notNull(),
+    // The cleaning, visit or laundry load being rated.
+    subjectId: uuid("subject_id").notNull(),
+    roomId: uuid("room_id").references(() => rooms.id, { onDelete: "set null" }),
+    stars: integer("stars").notNull(),
+    comment: text("comment"),
+    // Ratings of 3 or lower stay flagged until someone writes a follow-up.
+    followUp: text("follow_up"),
+    followedUpBy: uuid("followed_up_by").references(() => staff.id, { onDelete: "set null" }),
+    followedUpAt: timestamp("followed_up_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("feedback_once").on(t.occupantId, t.subjectId)],
+);
+
+export type MaintenanceChecklist = typeof maintenanceChecklists.$inferSelect;
+export type ChecklistRun = typeof checklistRuns.$inferSelect;
+export type Feedback = typeof feedback.$inferSelect;
+export type FeedbackTopic = (typeof feedbackTopic.enumValues)[number];

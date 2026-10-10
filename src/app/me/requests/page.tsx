@@ -59,6 +59,9 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
               <Field label="What's wrong?" hint="What you saw and where exactly">
                 <Textarea name="details" rows={4} required maxLength={2000} />
               </Field>
+              <Field label="Photo" hint="Optional, helps us see the problem">
+                <Input name="photo" type="file" accept="image/*" />
+              </Field>
               <label className="flex min-h-11 items-center gap-2.5 text-sm sm:min-h-0">
                 <input type="checkbox" name="urgent" /> Urgent (leak, no power, safety problem)
               </label>
@@ -85,6 +88,9 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
                   <Input name="preferredTime" />
                 </Field>
               </FormGrid>
+              <Field label="Photo" hint="Optional, helps us see the problem">
+                <Input name="photo" type="file" accept="image/*" />
+              </Field>
               <label className="flex min-h-11 items-center gap-2.5 text-sm sm:min-h-0">
                 <input type="checkbox" name="urgent" /> Urgent (leak, no power, safety problem)
               </label>

@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { and, asc, count, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
-import { formatDate, formatTimeRange, todayISO } from "@/lib/format";
+import { centavosToInput, formatDate, formatPeso, formatTimeRange, todayISO } from "@/lib/format";
 import { REQUEST_KIND_LABELS, REQUEST_STATUS_TONES, requestStatusLabel } from "@/lib/portal";
 import { ActionForm } from "@/components/action-form";
 import { Badge, Card, Empty, Field, FormGrid, Input, PageHeader, Select, Textarea, ViewTabs } from "@/components/ui";
 import { canHandleRequest } from "@/lib/service-work";
-import { createStaffRequest, updateRequest } from "./actions";
+import { createStaffRequest, recordRepairCost, reportProblem, updateRequest } from "./actions";
 import type { TenantRequest } from "@/db/schema";
 
 const VIEWS = {
@@ -16,6 +17,9 @@ const VIEWS = {
   closed: { label: "Closed", statuses: ["declined", "done"] },
 } satisfies Record<string, { label: string; statuses: TenantRequest["status"][] }>;
 type View = keyof typeof VIEWS;
+
+const reporter = alias(schema.staff, "reporter");
+const PAID_BY_LABELS = { hotel: "the hotel", company: "the company", occupant: "the tenant" } as const;
 
 const at = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" });
 
@@ -32,6 +36,8 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
   const db = await getDb();
   const staff = await db.query.staff.findMany({ where: and(eq(schema.staff.active, true), ne(schema.staff.role, "tenant")), orderBy: [asc(schema.staff.name)] });
   const occupants = CAN.manageOccupants.includes(user.role) ? await db.query.occupants.findMany({ orderBy: [asc(schema.occupants.fullName)] }) : [];
+  const rooms = await db.select({ id: schema.rooms.id, number: schema.rooms.number }).from(schema.rooms).orderBy(asc(schema.rooms.number));
+  const canCharge = CAN.recordBilling.includes(user.role);
   const [rows, byStatus] = await Promise.all([
     db
       .select({
@@ -40,9 +46,11 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
         roomNumber: schema.rooms.number,
         areaName: schema.areas.name,
         handledBy: schema.staff.name,
+        reportedBy: reporter.name,
       })
       .from(schema.tenantRequests)
-      .innerJoin(schema.occupants, eq(schema.tenantRequests.occupantId, schema.occupants.id))
+      .leftJoin(schema.occupants, eq(schema.tenantRequests.occupantId, schema.occupants.id))
+      .leftJoin(reporter, eq(schema.tenantRequests.reportedBy, reporter.id))
       .leftJoin(schema.rooms, eq(schema.tenantRequests.roomId, schema.rooms.id))
       .leftJoin(schema.areas, eq(schema.tenantRequests.areaId, schema.areas.id))
       .leftJoin(schema.staff, eq(schema.tenantRequests.handledBy, schema.staff.id))
@@ -60,10 +68,10 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
   return (
     <>
       <PageHeader
-        title="Tenant requests"
+        title="Requests"
         subtitle={user.role === "maintenance"
           ? "Repair requests assigned to you or waiting to be claimed. Updating an unassigned request assigns it to you."
-          : "Problems tenants reported, and maintenance or laundry they asked for outside the usual schedule."}
+          : "Problems tenants and staff reported, and maintenance visits tenants asked for."}
         actions={
           <ViewTabs
             items={(Object.keys(VIEWS) as View[]).map((v) => ({
@@ -75,6 +83,22 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
           />
         }
       />
+      <Card className="mb-5">
+        <details>
+          <summary className="cursor-pointer font-semibold">Report a problem in a room</summary>
+          <ActionForm action={reportProblem} submitLabel="Report" resetOnSuccess className="mt-3 space-y-4">
+            <Field label="Room">
+              <Select name="roomId" required defaultValue="">
+                <option value="">Choose the room</option>
+                {rooms.map((r) => <option key={r.id} value={r.id}>Room {r.number}</option>)}
+              </Select>
+            </Field>
+            <Field label="What's wrong"><Textarea name="details" required maxLength={2000} /></Field>
+            <Field label="Photo" hint="Optional"><Input name="photo" type="file" accept="image/*" /></Field>
+            <label className="flex gap-2 text-sm"><input type="checkbox" name="urgent" />Urgent</label>
+          </ActionForm>
+        </details>
+      </Card>
       {CAN.manageOccupants.includes(user.role) && <Card className="mb-5">
         <details><summary className="cursor-pointer font-semibold">Log a request for a tenant</summary>
           <ActionForm action={createStaffRequest} submitLabel="Log request" resetOnSuccess>
@@ -88,7 +112,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
       <p className="mb-3 text-sm text-muted">{countFor(view)} requests. Urgent work first, then due date and oldest first.</p>
       {rows.length === 0 && <Empty>{view === "closed" ? "No closed requests yet." : "All caught up. New requests from tenants show up here."}</Empty>}
       <div className="space-y-3">
-        {rows.map(({ r, name, roomNumber, areaName, handledBy }) => {
+        {rows.map(({ r, name, roomNumber, areaName, handledBy, reportedBy }) => {
           const canHandle = canHandleRequest(user, r) && !r.cancelledAt;
           const urgent = r.urgent && (r.status === "pending" || r.status === "approved");
           const when = [r.preferredDate && formatDate(r.preferredDate), r.preferredTime].filter(Boolean).join(", ");
@@ -119,14 +143,25 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                   <span className="text-xs text-muted sm:ml-auto">{at.format(r.createdAt)}</span>
                 </div>
                 <p className="mt-2 max-w-prose whitespace-pre-wrap text-sm">{r.details}</p>
+                {r.photoId && (
+                  <a className="mt-2 inline-block text-sm underline" href={`/api/photos/${r.photoId}`} target="_blank" rel="noreferrer">
+                    See the photo
+                  </a>
+                )}
                 <p className="mt-2 text-sm text-muted">
-                  From{" "}
-                  {canSeePeople ? (
-                    <Link className="text-foreground underline underline-offset-2" href={`/occupants/${r.occupantId}`}>
-                      {name}
-                    </Link>
+                  {r.occupantId ? (
+                    <>
+                      From{" "}
+                      {canSeePeople ? (
+                        <Link className="text-foreground underline underline-offset-2" href={`/occupants/${r.occupantId}`}>
+                          {name}
+                        </Link>
+                      ) : (
+                        <span className="text-foreground">{name}</span>
+                      )}
+                    </>
                   ) : (
-                    <span className="text-foreground">{name}</span>
+                    <>Reported by <span className="text-foreground">{reportedBy ?? "staff"}</span></>
                   )}
                   {when && <>, asked for {when}</>}
                 </p>
@@ -143,6 +178,29 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                       </p>
                     )}
                   </div>
+                )}
+                {r.cost != null && (
+                  <p className="mt-2 text-sm">
+                    Repair cost {formatPeso(r.cost)}, paid by {PAID_BY_LABELS[r.paidBy ?? "hotel"]}
+                    {r.chargeId && <span className="text-muted"> (charged in Billing)</span>}
+                  </p>
+                )}
+                {canHandle && r.kind !== "laundry" && !r.chargeId && (
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-sm underline underline-offset-2">{r.cost == null ? "Record the repair cost" : "Change the repair cost"}</summary>
+                    <ActionForm action={recordRepairCost.bind(null, r.id)} submitLabel="Save cost" className="mt-3 flex flex-wrap items-end gap-3">
+                      <Field label="Cost, parts and labour">
+                        <Input name="cost" inputMode="decimal" defaultValue={centavosToInput(r.cost)} required className="w-32" />
+                      </Field>
+                      <Field label="Who pays">
+                        <Select name="paidBy" defaultValue={r.paidBy ?? "hotel"}>
+                          <option value="hotel">The hotel</option>
+                          {canCharge && <option value="company">The company (adds a charge)</option>}
+                          {canCharge && r.occupantId && <option value="occupant">The tenant (adds a charge)</option>}
+                        </Select>
+                      </Field>
+                    </ActionForm>
+                  </details>
                 )}
                 {canHandle && (
                   <details className="group mt-3">

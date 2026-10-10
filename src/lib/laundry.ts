@@ -2,7 +2,7 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { LaundryService, LaundryStatus } from "@/db/schema";
-import { billToFor, chargeTypeByCode, contractForOccupant } from "./billing";
+import { addServiceCharge } from "./billing";
 import { savePhoto } from "./photos";
 
 export const LAUNDRY_STATUS_LABELS: Record<LaundryStatus, string> = {
@@ -41,32 +41,10 @@ export function laundryPrice(service: Pick<LaundryService, "ratePerKilo" | "cost
   return { amount, cost };
 }
 
-/**
- * Adds the laundry charge for a load to whoever pays under the tenant's contract rule
- * (the tenant by default). Falls back to the tenant when there's no company to bill.
- */
-export async function chargeLoad(load: { id: string; number: number; occupantId: string; roomId: string | null }, amount: number, chargedOn: string, staffId: string, description: string) {
-  const db = await getDb();
-  const type = await chargeTypeByCode("laundry");
-  const contractId = await contractForOccupant(load.occupantId, chargedOn);
-  const contract = contractId ? await db.query.contracts.findFirst({ where: eq(schema.contracts.id, contractId) }) : null;
-  const billable = contract && ["active", "ended", "terminated"].includes(contract.status) ? contract : null;
-  let billTo = await billToFor(billable?.id ?? null, type.id);
-  if (billTo === "company" && !billable) billTo = "occupant";
-  const [charge] = await db
-    .insert(schema.charges)
-    .values({
-      chargeTypeId: type.id,
-      billTo,
-      contractId: billable?.id ?? null,
-      occupantId: load.occupantId,
-      roomId: load.roomId,
-      description,
-      amount,
-      chargedOn,
-      createdBy: staffId,
-    })
-    .returning();
+/** Adds the laundry charge for a load; who pays follows the contract's Laundry rule (the tenant by default). */
+export async function chargeLoad(load: { occupantId: string; roomId: string | null }, amount: number, chargedOn: string, staffId: string, description: string) {
+  const charge = await addServiceCharge({ typeCode: "laundry", occupantId: load.occupantId, roomId: load.roomId, amount, chargedOn, description, staffId });
+  if ("error" in charge) throw new Error(charge.error);
   return charge;
 }
 

@@ -11,6 +11,7 @@ import { audit } from "@/lib/audit";
 import { isISODate, str, todayISO } from "@/lib/format";
 import { getCurrentStay } from "@/lib/portal";
 import { createClaim } from "@/lib/laundry";
+import { savePhoto } from "@/lib/photos";
 import type { ActionState } from "@/lib/action-state";
 import type { TenantRequest } from "@/db/schema";
 
@@ -43,12 +44,15 @@ export async function createRequest(_: ActionState, fd: FormData): Promise<Actio
     const area = areaId ? await db.query.areas.findFirst({ where: and(eq(schema.areas.id, areaId), eq(schema.areas.active, true)) }) : null;
     if (areaId && !area) return { error: "That place can't take reports any more. Please tell the front desk." };
     if (area && kind !== "issue") return { error: "Only problems can be reported for a shared space." };
+    const photo = await savePhoto("request", fd.get("photo"), user.id);
+    if (photo && "error" in photo) return { error: photo.error };
     const [created] = await db
       .insert(schema.tenantRequests)
       .values({
         occupantId: occupant.id,
         roomId: area ? null : stay.room.id,
         areaId: area?.id ?? null,
+        photoId: photo?.id ?? null,
         kind,
         details,
         urgent: fd.get("urgent") === "on",

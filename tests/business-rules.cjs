@@ -432,3 +432,25 @@ test('laundry: desk to shop to tenant, priced by weight with a minimum, charged 
   assert.ok((await run(laundry.resolveClaim,claim.id,{},fd({resolution:'Shop paid 300'}))).ok);
   assert.ok((await run(laundry.resolveClaim,claim.id,{},fd({resolution:'Again'}))).error);
 });
+test('staff report problems; repair costs charge the right payer once', async () => {
+  const r=await room(); const p=await person(); await assign(p,r);
+  const [desk]=await db.insert(schema.staff).values({name:'Desk',username:`repair.desk${++serial}`,role:'front_desk',passwordHash:'unused'}).returning();
+  assert.ok((await actors.run(fix,()=>requests.reportProblem({},fd({roomId:r.id,details:'Leak under sink'})))).ok);
+  const staffReport=await db.query.tenantRequests.findFirst({where:eq(schema.tenantRequests.details,'Leak under sink')});
+  assert.equal(staffReport.occupantId,null); assert.equal(staffReport.reportedBy,fix.id); assert.equal(staffReport.assigneeId,fix.id);
+  assert.ok((await actors.run(fix,()=>requests.recordRepairCost(staffReport.id,{},fd({cost:'500',paidBy:'company'})))).error, 'maintenance cannot bill');
+  assert.ok((await actors.run(desk,()=>requests.recordRepairCost(staffReport.id,{},fd({cost:'500',paidBy:'occupant'})))).error, 'no tenant on a staff report');
+  assert.ok((await actors.run(fix,()=>requests.recordRepairCost(staffReport.id,{},fd({cost:'350',paidBy:'hotel'})))).ok);
+  let saved=await db.query.tenantRequests.findFirst({where:eq(schema.tenantRequests.id,staffReport.id)});
+  assert.equal(saved.cost,35000); assert.equal(saved.chargeId,null);
+  assert.ok((await actors.run(desk,()=>requests.recordRepairCost(staffReport.id,{},fd({cost:'350',paidBy:'company'})))).ok);
+  saved=await db.query.tenantRequests.findFirst({where:eq(schema.tenantRequests.id,staffReport.id)});
+  const charge=await db.query.charges.findFirst({where:eq(schema.charges.id,saved.chargeId)});
+  assert.equal(charge.billTo,'company'); assert.equal(charge.contractId,contract.id); assert.equal(charge.amount,35000);
+  assert.ok((await actors.run(desk,()=>requests.recordRepairCost(staffReport.id,{},fd({cost:'400',paidBy:'company'})))).error, 'charged once');
+  const [tenantReport]=await db.insert(schema.tenantRequests).values({occupantId:p.id,roomId:r.id,kind:'issue',details:'Broken chair'}).returning();
+  assert.ok((await actors.run(desk,()=>requests.recordRepairCost(tenantReport.id,{},fd({cost:'1200',paidBy:'occupant'})))).ok);
+  const t=await db.query.tenantRequests.findFirst({where:eq(schema.tenantRequests.id,tenantReport.id)});
+  const tc=await db.query.charges.findFirst({where:eq(schema.charges.id,t.chargeId)});
+  assert.equal(tc.billTo,'occupant'); assert.equal(tc.occupantId,p.id);
+});

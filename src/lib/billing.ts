@@ -313,3 +313,63 @@ export const formatRate = (tenThousandths: number | null | undefined) =>
 
 export const rateToInput = (tenThousandths: number | null | undefined) =>
   tenThousandths == null ? "" : String(tenThousandths / 10_000);
+
+const BILLABLE_STATUSES = ["active", "ended", "terminated"];
+
+/** The company contract a room is leased under right now, if it can be billed. */
+export async function contractForRoom(roomId: string): Promise<string | null> {
+  const db = await getDb();
+  const rows = await db
+    .select({ id: schema.contracts.id, status: schema.contracts.status })
+    .from(schema.contractRooms)
+    .innerJoin(schema.contracts, eq(schema.contractRooms.contractId, schema.contracts.id))
+    .where(eq(schema.contractRooms.roomId, roomId));
+  return rows.find((r) => r.status === "active")?.id ?? null;
+}
+
+/**
+ * Adds a charge from service work (laundry, a repair). `billTo` picks the payer; when left out,
+ * the contract's rule for the charge type decides. A company charge needs a billable contract,
+ * and falls back to the tenant when there is one.
+ */
+export async function addServiceCharge(input: {
+  typeCode: string;
+  occupantId: string | null;
+  roomId: string | null;
+  amount: number;
+  chargedOn: string;
+  description: string;
+  staffId: string;
+  billTo?: "company" | "occupant";
+}): Promise<{ error: string } | typeof schema.charges.$inferSelect> {
+  const db = await getDb();
+  const type = await chargeTypeByCode(input.typeCode);
+  const contractId = input.occupantId
+    ? await contractForOccupant(input.occupantId, input.chargedOn)
+    : input.roomId
+      ? await contractForRoom(input.roomId)
+      : null;
+  const contract = contractId ? await db.query.contracts.findFirst({ where: eq(schema.contracts.id, contractId) }) : null;
+  const billable = contract && BILLABLE_STATUSES.includes(contract.status) ? contract : null;
+  let billTo = input.billTo ?? (await billToFor(billable?.id ?? null, type.id));
+  if (billTo === "company" && !billable) {
+    if (input.billTo === "company" || !input.occupantId) return { error: "There's no company contract to bill for this room." };
+    billTo = "occupant";
+  }
+  if (billTo === "occupant" && !input.occupantId) return { error: "There's no tenant to bill for this." };
+  const [charge] = await db
+    .insert(schema.charges)
+    .values({
+      chargeTypeId: type.id,
+      billTo,
+      contractId: billable?.id ?? null,
+      occupantId: input.occupantId,
+      roomId: input.roomId,
+      description: input.description,
+      amount: input.amount,
+      chargedOn: input.chargedOn,
+      createdBy: input.staffId,
+    })
+    .returning();
+  return charge;
+}
