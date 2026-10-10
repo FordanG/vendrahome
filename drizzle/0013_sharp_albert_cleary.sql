@@ -1,0 +1,1 @@
+ALTER TYPE "public"."check_in_purpose" ADD VALUE 'checklist' BEFORE 'other';

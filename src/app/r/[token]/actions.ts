@@ -8,6 +8,7 @@ import { audit } from "@/lib/audit";
 import { formatMoment, str } from "@/lib/format";
 import { mutate } from "@/lib/mutations";
 import { syncVisitRequest, visitPermission } from "@/lib/service-work";
+import { beginRun } from "@/lib/checklists";
 import type { ActionState } from "@/lib/action-state";
 import type { CheckInPurpose, Room, Staff } from "@/db/schema";
 
@@ -116,5 +117,18 @@ export async function startCleaning(token: string): Promise<ActionState> {
       .returning();
     await audit(user.id, "start", "cleaning", cleaning.id, { number: room.number });
     return { redirectTo: `/housekeeping/cleanings/${cleaning.id}` };
+  });
+}
+
+/** Checks in for a maintenance checklist and opens it. Continues the room's unfinished one if there is one. */
+export async function startChecklist(token: string, checklistId: string): Promise<ActionState> {
+  return mutate(async () => {
+    const user = await requireStaff(CAN.runChecklists);
+    const room = await roomFor(token);
+    if (!room) return { error: GONE };
+    const { row } = await recordCheckIn(user, room, "checklist");
+    const run = await beginRun(user, room.id, checklistId, row.id);
+    if (!run) return { error: "That checklist isn't in use." };
+    return { redirectTo: `/maintenance/checklists/runs/${run.id}` };
   });
 }

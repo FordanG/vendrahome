@@ -12,7 +12,8 @@ import { Brand } from "@/components/brand";
 import { Badge, Card, Field, Input, LinkButton, SectionTitle, Textarea } from "@/components/ui";
 import { reportProblem } from "@/app/(app)/requests/actions";
 import type { Area, CheckInPurpose, Room, Staff } from "@/db/schema";
-import { checkIn, finishVisit, startCleaning, startItemsCheck, type DoorCheck } from "./actions";
+import { checkIn, finishVisit, startChecklist, startCleaning, startItemsCheck, type DoorCheck } from "./actions";
+import { roomChecklists } from "@/lib/checklists";
 
 // Midnight in Manila (UTC+8) as a moment.
 const startOfManilaDay = (iso: string) => new Date(addDaysISO(iso, -1) + "T16:00:00Z");
@@ -21,6 +22,7 @@ const PURPOSE_LABELS: Record<CheckInPurpose, string> = {
   visit: "Visit",
   cleaning: "Cleaning",
   inventory: "Items check",
+  checklist: "Checklist",
   other: "Check-in",
 };
 
@@ -117,6 +119,7 @@ async function RoomView({ room, token, user }: { room: Room; token: string; user
   const permissions = await Promise.all(open.map((v) => visitPermission(user, v)));
   const visits = open.filter((_, i) => !permissions[i]);
   const mine = checkIns.filter(({ c }) => c.staffId === user.id);
+  const checklists = CAN.runChecklists.includes(user.role) ? await roomChecklists(room.id, today) : [];
 
   return (
     <>
@@ -197,6 +200,34 @@ async function RoomView({ room, token, user }: { room: Room; token: string; user
           </div>
         )}
       </Card>
+
+      {checklists.length > 0 && (
+        <Card>
+          <SectionTitle>Maintenance checklists</SectionTitle>
+          <ul className="divide-y divide-border">
+            {checklists.map((c) => (
+              <li key={c.checklist.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                <span className="text-sm">
+                  <span className="font-medium">{c.checklist.name}</span>
+                  <span className={`block text-xs ${c.daysLate > 0 ? "text-attention" : "text-muted"}`}>
+                    {c.due > today ? `Next due ${formatDate(c.due)}` : c.daysLate > 0 ? `${c.daysLate} ${c.daysLate === 1 ? "day" : "days"} overdue` : "Due today"}
+                  </span>
+                </span>
+                <ActionForm
+                  action={async () => {
+                    "use server";
+                    return startChecklist(token, c.checklist.id);
+                  }}
+                  submitLabel="Start"
+                  pendingLabel="Opening…"
+                  submitVariant={c.due <= today ? "primary" : "secondary"}
+                  className="flex items-center gap-3"
+                />
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {CAN.viewInventory.includes(user.role) && (
         <Card>

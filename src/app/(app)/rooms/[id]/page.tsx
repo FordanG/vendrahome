@@ -12,6 +12,8 @@ import { REQUEST_KIND_LABELS, REQUEST_STATUS_TONES, requestStatusLabel } from "@
 import { ActionForm } from "@/components/action-form";
 import { Badge, Card, Detail, Empty, Field, Input, PageHeader, SectionTitle, Select, Table, Td, Th } from "@/components/ui";
 import { startCleaningHere } from "../../housekeeping/actions";
+import { startRunHere } from "../../maintenance/checklists/actions";
+import { roomChecklists } from "@/lib/checklists";
 import { deleteRoom, replaceDoorCode, setPeopleAllowed, setRoomCondition, updateRoom } from "../actions";
 import { qrSvg, roomScanUrl } from "@/lib/room-qr";
 import { everyLabel, lastCleanedLabel, roomCleaning } from "@/lib/housekeeping";
@@ -42,6 +44,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
       .orderBy(desc(schema.tenantRequests.urgent), desc(schema.tenantRequests.createdAt)),
     roomCleaning(id, today),
   ]);
+  const checklists = CAN.runChecklists.includes(user.role) ? await roomChecklists(id, today) : [];
   const live = board.find((r) => r.id === id)!;
   const canManage = CAN.manageRooms.includes(user.role);
   const canSeePeople = CAN.manageOccupants.includes(user.role);
@@ -97,6 +100,32 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
                 )}
               </Detail>
               <Detail label="Contract ends">{live.contract ? formatDate(live.contract.endDate) : null}</Detail>
+              {checklists.length > 0 && (
+                <Detail label="Maintenance checklists">
+                  <ul className="space-y-2">
+                    {checklists.map((c) => (
+                      <li key={c.checklist.id}>
+                        {c.checklist.name}
+                        <span className={`block text-xs ${c.daysLate > 0 ? "text-attention" : "text-muted"}`}>
+                          {c.due > today ? `Next due ${formatDate(c.due)}` : c.daysLate > 0 ? `${c.daysLate} days overdue` : "Due today"}
+                        </span>
+                        {c.due <= today && (
+                          <ActionForm
+                            action={async () => {
+                              "use server";
+                              return startRunHere(room.id, c.checklist.id);
+                            }}
+                            submitLabel="Start without scanning"
+                            pendingLabel="Opening…"
+                            submitVariant="secondary"
+                            className="mt-1"
+                          />
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </Detail>
+              )}
               <Detail label="Cleaning">
                 {everyLabel(cleaning.every)}
                 <span className="block text-xs text-muted">

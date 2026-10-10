@@ -298,7 +298,7 @@ export const maintenanceVisits = pgTable(
   (t) => [index("visits_date_idx").on(t.date), index("visits_room_idx").on(t.roomId)],
 );
 
-export const checkInPurpose = pgEnum("check_in_purpose", ["visit", "cleaning", "inventory", "other"]);
+export const checkInPurpose = pgEnum("check_in_purpose", ["visit", "cleaning", "inventory", "checklist", "other"]);
 
 // A staff member scanning a room's door code and confirming they are there.
 // A printed code can be photographed, so this records presence, not proof of it.

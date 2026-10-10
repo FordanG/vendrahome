@@ -6,7 +6,7 @@ import { addDaysISO, formatDate, formatMoment, formatTimeRange, todayISO } from 
 import { VISIT_STATUS_LABELS, VISIT_STATUS_TONES } from "@/lib/portal";
 import { ActionForm } from "@/components/action-form";
 import { TargetSelect } from "@/components/target-select";
-import { Badge, Card, Empty, Field, FormGrid, Input, PageHeader, SectionTitle, Select, ViewTabs } from "@/components/ui";
+import { Badge, Card, Empty, Field, FormGrid, Input, LinkButton, PageHeader, SectionTitle, Select, ViewTabs } from "@/components/ui";
 import type { MaintenanceVisit } from "@/db/schema";
 import { scheduleVisits, updateVisit, updateVisitBatch } from "./actions";
 
@@ -160,12 +160,15 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
             : "Done, missed and cancelled visits from the last 90 days."
         }
         actions={
+          <>
+          {CAN.runChecklists.includes(user.role) && <LinkButton variant="secondary" href="/maintenance/checklists">Checklists</LinkButton>}
           <ViewTabs
             items={[
               { href: "/maintenance", label: "Scheduled", count: view === "upcoming" ? visits.length : undefined, active: view === "upcoming" },
               { href: "/maintenance?view=past", label: "Past", active: view === "past" },
             ]}
           />
+          </>
         }
       />
       <div className="grid gap-6 lg:grid-cols-3">
