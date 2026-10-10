@@ -73,13 +73,17 @@ export async function chargeLoad(load: { id: string; number: number; occupantId:
 export const CLAIM_KIND_LABELS = { missing: "Something missing", damaged: "Something damaged" } as const;
 export const CLAIM_DAYS = 7;
 
+/** Whether a tenant can still report a problem with this load. */
+export const tenantCanClaim = (load: { status: string; returnedAt: Date | null }) =>
+  (load.status === "ready" || load.status === "collected") && !!load.returnedAt && Date.now() - load.returnedAt.getTime() <= CLAIM_DAYS * 86_400_000;
+
 /** Records a claim on a load that came back. Tenants can claim up to a week after it was ready. */
 export async function createClaim(loadId: string, fd: FormData, userId: string, tenantOccupantId?: string) {
   const db = await getDb();
   const load = await db.query.laundryLoads.findFirst({ where: eq(schema.laundryLoads.id, loadId) });
   if (!load || (tenantOccupantId && load.occupantId !== tenantOccupantId)) return { error: "Load not found." } as const;
   if (load.status !== "ready" && load.status !== "collected") return { error: "You can report a problem once the load is back from the shop." } as const;
-  if (tenantOccupantId && load.returnedAt && Date.now() - load.returnedAt.getTime() > CLAIM_DAYS * 86_400_000)
+  if (tenantOccupantId && !tenantCanClaim(load))
     return { error: `Problems need to be reported within ${CLAIM_DAYS} days. Please talk to the front desk.` } as const;
   const kind = String(fd.get("kind"));
   if (kind !== "missing" && kind !== "damaged") return { error: "Is something missing or damaged?" } as const;

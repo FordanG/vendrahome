@@ -2,7 +2,7 @@ import { asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireTenant } from "@/lib/auth";
 import { formatMoment, formatPeso } from "@/lib/format";
-import { CLAIM_DAYS, CLAIM_KIND_LABELS, formatKilos, LAUNDRY_STATUS_LABELS, LAUNDRY_STATUS_TONES, loadLabel } from "@/lib/laundry";
+import { CLAIM_KIND_LABELS, tenantCanClaim, formatKilos, LAUNDRY_STATUS_LABELS, LAUNDRY_STATUS_TONES, loadLabel } from "@/lib/laundry";
 import { ActionForm } from "@/components/action-form";
 import { Badge, Card, Empty, Field, Input, PageHeader, Select, Textarea } from "@/components/ui";
 import { reportLaundryClaim } from "../actions";
@@ -24,7 +24,6 @@ export default async function TenantLaundryPage() {
         .where(inArray(schema.laundryClaims.loadId, loads.map((x) => x.l.id)))
         .orderBy(asc(schema.laundryClaims.createdAt))
     : [];
-  const claimWindow = Date.now() - CLAIM_DAYS * 86_400_000;
 
   return (
     <>
@@ -39,7 +38,7 @@ export default async function TenantLaundryPage() {
         <div className="space-y-3">
           {loads.map(({ l, service }) => {
             const mine = claims.filter((c) => c.loadId === l.id);
-            const canClaim = (l.status === "ready" || l.status === "collected") && !!l.returnedAt && l.returnedAt.getTime() > claimWindow;
+            const canClaim = tenantCanClaim(l);
             return (
               <Card key={l.id} className="p-3 sm:p-4">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
