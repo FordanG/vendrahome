@@ -84,6 +84,18 @@ export const rooms = pgTable("rooms", {
   condition: roomCondition("condition").notNull().default("ready"),
   notes: text("notes"),
   qrToken: text("qr_token").notNull().unique(),
+  // Regular cleaning: every this many days. Null means no regular cleaning.
+  cleanEveryDays: integer("clean_every_days"),
+});
+
+// Shared spaces with their own door code: kitchen, laundry area, hallways.
+// Tenants who scan one report a problem there.
+export const areas = pgTable("areas", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  floor: integer("floor"),
+  qrToken: text("qr_token").notNull().unique(),
+  active: boolean("active").notNull().default(true),
 });
 
 export const clients = pgTable("clients", {
@@ -286,6 +298,8 @@ export const maintenanceVisits = pgTable(
   (t) => [index("visits_date_idx").on(t.date), index("visits_room_idx").on(t.roomId)],
 );
 
+export const checkInPurpose = pgEnum("check_in_purpose", ["visit", "cleaning", "inventory", "other"]);
+
 // A staff member scanning a room's door code and confirming they are there.
 // A printed code can be photographed, so this records presence, not proof of it.
 export const roomCheckIns = pgTable(
@@ -299,9 +313,36 @@ export const roomCheckIns = pgTable(
       .notNull()
       .references(() => staff.id, { onDelete: "cascade" }),
     visitId: uuid("visit_id").references(() => maintenanceVisits.id, { onDelete: "set null" }),
+    purpose: checkInPurpose("purpose").notNull().default("other"),
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("check_ins_room_idx").on(t.roomId, t.at), index("check_ins_visit_idx").on(t.visitId)],
+);
+
+// Housekeeping. The checklist is one list for every room; each cleaning keeps
+// its own copy of the steps, so changing the list doesn't rewrite history.
+export const cleaningSteps = pgTable("cleaning_steps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  label: text("label").notNull(),
+  position: integer("position").notNull().default(0),
+});
+
+export const cleanings = pgTable(
+  "cleanings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    roomId: uuid("room_id")
+      .notNull()
+      .references(() => rooms.id, { onDelete: "cascade" }),
+    staffId: uuid("staff_id").references(() => staff.id, { onDelete: "set null" }),
+    // The door-code check-in it started from, if any.
+    checkInId: uuid("check_in_id").references(() => roomCheckIns.id, { onDelete: "set null" }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    steps: jsonb("steps").$type<{ label: string; done: boolean }[]>().notNull().default([]),
+    notes: text("notes"),
+  },
+  (t) => [index("cleanings_room_idx").on(t.roomId, t.startedAt)],
 );
 
 // issue: something wrong in the unit. maintenance and laundry: asking for a
@@ -317,6 +358,8 @@ export const tenantRequests = pgTable(
       .notNull()
       .references(() => occupants.id, { onDelete: "cascade" }),
     roomId: uuid("room_id").references(() => rooms.id, { onDelete: "set null" }),
+    // Set instead of the room when the problem is in a shared space.
+    areaId: uuid("area_id").references(() => areas.id, { onDelete: "set null" }),
     kind: requestKind("kind").notNull(),
     details: text("details").notNull(),
     urgent: boolean("urgent").notNull().default(false),
@@ -636,6 +679,9 @@ export type HouseRule = typeof houseRules.$inferSelect;
 export type ScheduleEntry = typeof weeklySchedule.$inferSelect;
 export type MaintenanceVisit = typeof maintenanceVisits.$inferSelect;
 export type RoomCheckIn = typeof roomCheckIns.$inferSelect;
+export type CheckInPurpose = (typeof checkInPurpose.enumValues)[number];
+export type Cleaning = typeof cleanings.$inferSelect;
+export type Area = typeof areas.$inferSelect;
 export type TenantRequest = typeof tenantRequests.$inferSelect;
 export type ChargeType = typeof chargeTypes.$inferSelect;
 export type Charge = typeof charges.$inferSelect;

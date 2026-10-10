@@ -18,6 +18,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
       { href: "/", label: "Room board", icon: "board" },
       { href: "/requests", label: "Requests", icon: "requests" },
       { href: "/maintenance", label: "Maintenance", icon: "maintenance" },
+      { href: "/housekeeping", label: "Housekeeping", roles: ["admin", "front_desk"] },
     ],
   },
   {

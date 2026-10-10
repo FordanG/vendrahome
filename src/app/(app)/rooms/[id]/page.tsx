@@ -11,8 +11,10 @@ import { StayCell } from "@/components/stay";
 import { REQUEST_KIND_LABELS, REQUEST_STATUS_TONES, requestStatusLabel } from "@/lib/portal";
 import { ActionForm } from "@/components/action-form";
 import { Badge, Card, Detail, Empty, Field, Input, PageHeader, SectionTitle, Select, Table, Td, Th } from "@/components/ui";
+import { startCleaningHere } from "../../housekeeping/actions";
 import { deleteRoom, replaceDoorCode, setPeopleAllowed, setRoomCondition, updateRoom } from "../actions";
 import { qrSvg, roomScanUrl } from "@/lib/room-qr";
+import { everyLabel, lastCleanedLabel, roomCleaning } from "@/lib/housekeeping";
 import { RoomFields } from "../room-fields";
 
 export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
@@ -23,7 +25,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
   if (!room) notFound();
 
   const today = todayISO();
-  const [board, roomTypes, history, requests] = await Promise.all([
+  const [board, roomTypes, history, requests, cleaning] = await Promise.all([
     getRoomBoard(today),
     db.select().from(schema.roomTypes).orderBy(asc(schema.roomTypes.name)),
     db
@@ -38,6 +40,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
       .innerJoin(schema.occupants, eq(schema.tenantRequests.occupantId, schema.occupants.id))
       .where(and(eq(schema.tenantRequests.roomId, id), inArray(schema.tenantRequests.status, ["pending", "approved"]), requestScope(user)))
       .orderBy(desc(schema.tenantRequests.urgent), desc(schema.tenantRequests.createdAt)),
+    roomCleaning(id, today),
   ]);
   const live = board.find((r) => r.id === id)!;
   const canManage = CAN.manageRooms.includes(user.role);
@@ -94,6 +97,25 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
                 )}
               </Detail>
               <Detail label="Contract ends">{live.contract ? formatDate(live.contract.endDate) : null}</Detail>
+              <Detail label="Cleaning">
+                {everyLabel(cleaning.every)}
+                <span className="block text-xs text-muted">
+                  {lastCleanedLabel(cleaning.lastCleaned, today)}
+                  {cleaning.next && `. Next ${cleaning.next === today ? "today" : formatDate(cleaning.next)}`}
+                </span>
+                {CAN.cleanRooms.includes(user.role) && (
+                  <ActionForm
+                    action={async () => {
+                      "use server";
+                      return startCleaningHere(room.id);
+                    }}
+                    submitLabel="Clean without scanning"
+                    pendingLabel="Opening…"
+                    submitVariant="secondary"
+                    className="mt-2"
+                  />
+                )}
+              </Detail>
             </dl>
             <div className="mt-4 space-y-2">
               {live.occupants.length === 0 && <p className="text-sm text-muted">No one lives here right now.</p>}

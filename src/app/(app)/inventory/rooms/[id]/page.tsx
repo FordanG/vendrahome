@@ -12,10 +12,12 @@ import { addItem, markServiced, moveItem, recordCheck, retireItem, setItemCondit
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export default async function RoomInventoryPage({ params }: PageProps<"/inventory/rooms/[id]">) {
+export default async function RoomInventoryPage({ params, searchParams }: PageProps<"/inventory/rooms/[id]">) {
   const user = await requireStaff(CAN.viewInventory);
   const canManage = CAN.manageInventory.includes(user.role);
   const { id } = await params;
+  // Opened from the door code with the kind of check already chosen.
+  const { kind: askedKind } = await searchParams;
   const storeroom = id === "storeroom";
   if (!storeroom && !UUID.test(id)) notFound();
   const db = await getDb();
@@ -114,7 +116,7 @@ export default async function RoomInventoryPage({ params }: PageProps<"/inventor
                   <p className="text-sm text-muted">Go through every item. Each item&apos;s condition is updated to what you find, and this check is kept as the record for later.</p>
                   <FormGrid>
                     <Field label="Kind of check">
-                      <Select name="kind" defaultValue={current.length ? "spot" : "contract_start"}>
+                      <Select name="kind" defaultValue={typeof askedKind === "string" && Object.hasOwn(CHECK_KIND_LABELS, askedKind) ? askedKind : current.length ? "spot" : "contract_start"}>
                         {Object.entries(CHECK_KIND_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </Select>
                     </Field>

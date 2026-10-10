@@ -86,9 +86,11 @@ It starts its own server on port 3456 with a fresh database in `.data/e2e` and b
 - Utilities (`/billing/utilities`): one bill a period for the whole contract, from the provider's bill or a main-meter reading × rate, with a photo; flags bills far above the usual and rejects readings lower than the last
 - Room inventory (`/inventory`): items per room with condition, tag, serial number, replacement cost and service cycle; a standard list per room type added to every room in one step; contract-start, move-in, move-out, spot and handover checks; differences become damage charges or deposit deductions; a damaged item can book a repair visit; storeroom, moves, retirements and item history
 
-- Door codes: a QR code for each room, printable one at a time or as a sheet (`/rooms/door-codes`). Tenants who scan go to their requests; staff sign in if needed, check in at the room, and can mark the visit done. The maintenance page shows who checked in and when, and flags visits marked done without a check-in. The admin can replace a room's code. Set `APP_URL` to the public address so printed codes point there.
+- Door codes: a QR code for each room, printable one at a time or as a sheet (`/rooms/door-codes`). Staff who scan sign in if needed and pick what they're there to do: clean the room, check in for a repair or maintenance visit (and mark it done), or start a move-in, move-out or spot check of the room's items. Every scan is recorded; the maintenance page, cleanings and item checks show whether the door code was scanned. Tenants who scan go to their requests. The admin can replace a room's code. Set `APP_URL` to the public address so printed codes point there.
+- Shared-space codes: the admin adds places like the kitchen or laundry area on the door codes page. Tenants who scan one report a problem there; staff who scan one see what's open there.
+- Housekeeping (`/housekeeping`): how often each room is cleaned (by room, floor, type or every room), rooms due and overdue by floor, cleanings in progress and the last week's, and the admin's cleaning checklist. A cleaning starts from the door code and is ticked off step by step. Room pages and the tenant's home page show the next cleaning.
 
-Next: laundry loads and run sheets, housekeeping schedules and checklists, feedback. Moving to Supabase for shared hosting.
+Next: laundry loads and run sheets, recurring maintenance checklists, feedback. Moving to Supabase for shared hosting.
 
 
 ## Account profiles

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireTenant } from "@/lib/auth";
 import { formatDate, formatTimeRange, todayISO } from "@/lib/format";
@@ -39,6 +39,14 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
       .orderBy(desc(schema.tenantRequests.createdAt), desc(schema.tenantRequests.id))
       .limit(pageSize).offset((page - 1) * pageSize),
   ]);
+  // Came from a shared space's door code: the form reports a problem there.
+  const area = typeof params.area === "string" && /^[0-9a-f-]{36}$/.test(params.area)
+    ? await db.query.areas.findFirst({ where: and(eq(schema.areas.id, params.area), eq(schema.areas.active, true)) })
+    : undefined;
+  const areaIds = [...new Set(requests.map((r) => r.areaId).filter((x): x is string => !!x))];
+  const areaNames = new Map(
+    areaIds.length ? (await db.query.areas.findMany({ columns: { id: true, name: true } })).map((a) => [a.id, a.name]) : [],
+  );
   const laundry = stay ? schedule.map((s) => s.e).filter((e) => e.kind === "laundry" && appliesToRoom(e, stay.room)) : [];
 
   return (
@@ -46,6 +54,23 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
       <PageHeader title="Requests" subtitle={stay ? `For room ${stay.room.number}` : undefined} />
       <div className="space-y-6">
         {stay ? (
+          area ? (
+          <Card className="border-brand">
+            <SectionTitle actions={<Link className="text-sm text-muted underline" href="/me/requests">Something else?</Link>}>
+              Report a problem: {area.name}
+            </SectionTitle>
+            <ActionForm action={createRequest} submitLabel="Send" pendingLabel="Sending…" resetOnSuccess>
+              <input type="hidden" name="areaId" value={area.id} />
+              <input type="hidden" name="kind" value="issue" />
+              <Field label="What's wrong?" hint="What you saw and where exactly">
+                <Textarea name="details" rows={4} required maxLength={2000} />
+              </Field>
+              <label className="flex min-h-11 items-center gap-2.5 text-sm sm:min-h-0">
+                <input type="checkbox" name="urgent" /> Urgent (leak, no power, safety problem)
+              </label>
+            </ActionForm>
+          </Card>
+          ) : (
           <Card>
             <SectionTitle>Send a new request</SectionTitle>
             <ActionForm action={createRequest} submitLabel="Send" pendingLabel="Sending…" resetOnSuccess>
@@ -79,6 +104,7 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
               </p>
             </ActionForm>
           </Card>
+          )
         ) : (
           <Empty>You don&apos;t have a room right now, so you can&apos;t send requests. Please talk to the front desk.</Empty>
         )}
@@ -93,6 +119,7 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
                 <Card key={r.id} className="p-3 sm:p-4">
                   <div className="flex flex-wrap items-center gap-2 text-sm">
                     <span className="font-medium">{REQUEST_KIND_LABELS[r.kind]}</span>
+                    {r.areaId && <span className="text-muted">in {areaNames.get(r.areaId) ?? "a shared space"}</span>}
                     <Badge tone={REQUEST_STATUS_TONES[r.status]}>{requestStatusLabel(r)}</Badge>
                     {r.urgent && <Badge tone="red">Urgent</Badge>}
                     <span className="text-xs text-muted">{at.format(r.createdAt)}</span>

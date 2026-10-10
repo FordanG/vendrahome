@@ -71,6 +71,13 @@
       "when": 1791538607674,
       "tag": "0009_loud_clea",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791539700469,
+      "tag": "0010_burly_mole_man",
+      "breakpoints": true
     }
   ]
 }

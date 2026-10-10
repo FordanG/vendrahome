@@ -38,11 +38,13 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
         r: schema.tenantRequests,
         name: schema.occupants.fullName,
         roomNumber: schema.rooms.number,
+        areaName: schema.areas.name,
         handledBy: schema.staff.name,
       })
       .from(schema.tenantRequests)
       .innerJoin(schema.occupants, eq(schema.tenantRequests.occupantId, schema.occupants.id))
       .leftJoin(schema.rooms, eq(schema.tenantRequests.roomId, schema.rooms.id))
+      .leftJoin(schema.areas, eq(schema.tenantRequests.areaId, schema.areas.id))
       .leftJoin(schema.staff, eq(schema.tenantRequests.handledBy, schema.staff.id))
       .where(and(inArray(schema.tenantRequests.status, VIEWS[view].statuses), scope))
       .orderBy(desc(schema.tenantRequests.urgent), asc(schema.tenantRequests.dueDate), asc(schema.tenantRequests.createdAt), asc(schema.tenantRequests.id))
@@ -86,7 +88,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
       <p className="mb-3 text-sm text-muted">{countFor(view)} requests. Urgent work first, then due date and oldest first.</p>
       {rows.length === 0 && <Empty>{view === "closed" ? "No closed requests yet." : "All caught up. New requests from tenants show up here."}</Empty>}
       <div className="space-y-3">
-        {rows.map(({ r, name, roomNumber, handledBy }) => {
+        {rows.map(({ r, name, roomNumber, areaName, handledBy }) => {
           const canHandle = canHandleRequest(user, r) && !r.cancelledAt;
           const urgent = r.urgent && (r.status === "pending" || r.status === "approved");
           const when = [r.preferredDate && formatDate(r.preferredDate), r.preferredTime].filter(Boolean).join(", ");
@@ -100,8 +102,14 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                   urgent ? "border-attention bg-attention text-attention-foreground" : "border-border bg-background/60"
                 }`}
               >
-                <span className={`text-[11px] ${urgent ? "text-attention-foreground/80" : "text-muted"}`}>Room</span>
-                <span className="plate text-2xl font-bold leading-none">{roomNumber ?? "–"}</span>
+                {areaName ? (
+                  <span className="break-words text-xs font-semibold leading-tight">{areaName}</span>
+                ) : (
+                  <>
+                    <span className={`text-[11px] ${urgent ? "text-attention-foreground/80" : "text-muted"}`}>Room</span>
+                    <span className="plate text-2xl font-bold leading-none">{roomNumber ?? "?"}</span>
+                  </>
+                )}
                 {urgent && <span className="mt-1 text-[11px] font-semibold">Urgent</span>}
               </div>
               <div className="min-w-0 flex-1 p-4">

@@ -138,6 +138,12 @@ export const CAN = {
   // Door QR codes: the office prints them; anyone who works on rooms checks in with one.
   printDoorCodes: ["admin", "front_desk"] as StaffRole[],
   checkInAtRooms: ["admin", "front_desk", "maintenance"] as StaffRole[],
+  // Housekeeping: front desk & housekeeping clean rooms and set how often; the admin sets the checklist.
+  cleanRooms: ["admin", "front_desk"] as StaffRole[],
+  manageCleaningSchedule: ["admin", "front_desk"] as StaffRole[],
+  manageChecklist: ["admin"] as StaffRole[],
+  // Shared spaces with their own door code.
+  manageAreas: ["admin"] as StaffRole[],
   // Billing: front desk sees accounts, takes payments and adds charges; the admin
   // issues statements, enters utility bills and makes corrections.
   viewBilling: ["admin", "front_desk"] as StaffRole[],

@@ -4,6 +4,7 @@ import { getDb, schema } from "@/db";
 import { requireTenant } from "@/lib/auth";
 import { formatDate, formatPeso, formatTimeRange, todayISO } from "@/lib/format";
 import { occupantAccount } from "@/lib/billing";
+import { roomCleaning } from "@/lib/housekeeping";
 import {
   appliesToRoom,
   getCurrentStay,
@@ -35,6 +36,7 @@ export default async function TenantHomePage() {
       .limit(5),
     occupantAccount(occupant.id),
   ]);
+  const cleaning = stay ? await roomCleaning(stay.room.id, today) : null;
   const visits = stay
     ? await db
         .select()
@@ -79,6 +81,7 @@ export default async function TenantHomePage() {
               <Detail label="Moved in">{formatDate(stay.a.checkIn)}</Detail>
               <Detail label="Expected to move out">{stay.a.expectedCheckOut ? formatDate(stay.a.expectedCheckOut) : null}</Detail>
               <Detail label="Keys and cards you have" empty="None recorded">{stay.a.keysIssued}</Detail>
+              {cleaning?.next && <Detail label="Next room cleaning">{cleaning.next === today ? "Today" : formatDate(cleaning.next)}</Detail>}
             </dl>
           </section>
         ) : (

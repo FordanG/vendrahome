@@ -37,11 +37,17 @@ export async function createRequest(_: ActionState, fd: FormData): Promise<Actio
     if (!stay) return { error: "You don't have a room right now. Please talk to the front desk." };
 
     const db = await getDb();
+    // A problem in a shared space, reported from its door code.
+    const areaId = str(fd.get("areaId"));
+    const area = areaId ? await db.query.areas.findFirst({ where: and(eq(schema.areas.id, areaId), eq(schema.areas.active, true)) }) : null;
+    if (areaId && !area) return { error: "That place can't take reports any more. Please tell the front desk." };
+    if (area && kind !== "issue") return { error: "Only problems can be reported for a shared space." };
     const [created] = await db
       .insert(schema.tenantRequests)
       .values({
         occupantId: occupant.id,
-        roomId: stay.room.id,
+        roomId: area ? null : stay.room.id,
+        areaId: area?.id ?? null,
         kind,
         details,
         urgent: fd.get("urgent") === "on",
@@ -49,7 +55,7 @@ export async function createRequest(_: ActionState, fd: FormData): Promise<Actio
         preferredTime: str(fd.get("preferredTime")),
       })
       .returning();
-    await audit(user.id, "create", "tenant_request", created.id, { kind, room: stay.room.number });
+    await audit(user.id, "create", "tenant_request", created.id, { kind, room: area ? null : stay.room.number, area: area?.name });
     revalidatePath("/me");
     revalidatePath("/me/requests");
     revalidatePath("/requests");

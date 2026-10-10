@@ -77,6 +77,9 @@ export function formatTime(hhmm: string | null | undefined): string {
 const manilaClock = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", hour: "numeric", minute: "2-digit" });
 const manilaDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" });
 
+/** The Manila calendar date a moment falls on, as YYYY-MM-DD. */
+export const manilaDate = (at: Date) => manilaDay.format(at);
+
 /** A moment as Manila time: "10:42 AM" today, "Oct 8, 2026, 10:42 AM" on another day. */
 export function formatMoment(at: Date): string {
   const day = manilaDay.format(at);

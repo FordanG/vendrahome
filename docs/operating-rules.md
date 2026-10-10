@@ -1,6 +1,6 @@
 # Operating rules and rollout
 
-These corrections address the 3 October 2026 platform review. Billing and room inventory were added afterwards (see their sections below); door codes were added after that; full laundry and housekeeping modules are still to come.
+These corrections address the 3 October 2026 platform review. Billing and room inventory were added afterwards (see their sections below); door codes and housekeeping were added after that; full laundry is still to come.
 
 ## Rooms and stays
 
@@ -96,4 +96,19 @@ Check room, occupant and assignment counts and representative records before sel
 - Each room has one code. Admin and front desk can print it; only the admin can replace it, which stops the printed one working.
 - Scanning needs a signed-in account. Tenants go to their requests page; staff see the room and check in.
 - A check-in records who was at the door and when, linked to a visit when one is picked. A printed code can be photographed, so a check-in shows presence; it does not prove it. Visits marked done without a check-in are flagged on the maintenance page.
-- Scanning again within 10 minutes for the same visit doesn't add another check-in.
+- Scanning again within 10 minutes for the same thing doesn't add another check-in.
+- Each check-in records what it was for: a visit, a cleaning, an items check, or just being there.
+- An items check counts as scanned when the same person scanned the room for an items check in the 3 hours before saving it.
+
+## Shared spaces
+
+- The admin adds, renames, turns off or replaces the code of each shared space. Turning a code off stops new reports from it.
+- A report from a shared space is a problem report only, with no room attached. Staff handle it on the Requests page like any other.
+
+## Housekeeping
+
+- Admin and front desk set how often rooms are cleaned and do the cleaning. Maintenance doesn't see housekeeping. Only the admin changes the checklist.
+- A room is due its interval after its last finished cleaning, or today if it has never been cleaned in the app. Overdue rooms show in red.
+- A room has at most one cleaning in progress; scanning again continues it. A cleaning started from the room page without scanning is recorded and flagged as not scanned.
+- A finished cleaning keeps the steps that weren't ticked, and can't be changed. One started by mistake can be cancelled before it is finished.
+- The first checklist comes with the database update; the admin edits it on the Housekeeping page.

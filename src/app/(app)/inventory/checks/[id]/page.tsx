@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
 import { CHECK_KIND_LABELS, CONDITION_LABELS, CONDITION_TONES, checkDifferences } from "@/lib/inventory";
-import { centavosToInput, formatDate, formatPeso } from "@/lib/format";
+import { centavosToInput, formatDate, formatMoment, formatPeso } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
 import { Badge, Card, Detail, Field, PageHeader, SectionTitle, Select, Input, Table, Td, Th } from "@/components/ui";
 import { chargeDifference, deductDifference } from "../../actions";
@@ -29,6 +29,19 @@ export default async function CheckPage({ params }: PageProps<"/inventory/checks
     check.contractId ? db.query.contracts.findFirst({ where: eq(schema.contracts.id, check.contractId) }) : null,
     checkDifferences(check),
   ]);
+  // A door-code check-in by the same person at this room in the hours before the check was saved.
+  const scanned = check.checkedBy
+    ? await db.query.roomCheckIns.findFirst({
+        where: and(
+          eq(schema.roomCheckIns.roomId, check.roomId),
+          eq(schema.roomCheckIns.staffId, check.checkedBy),
+          eq(schema.roomCheckIns.purpose, "inventory"),
+          gte(schema.roomCheckIns.at, new Date(check.createdAt.getTime() - 3 * 3_600_000)),
+          lte(schema.roomCheckIns.at, check.createdAt),
+        ),
+        orderBy: [desc(schema.roomCheckIns.at)],
+      })
+    : undefined;
   const canCharge = CAN.recordBilling.includes(user.role);
   const canDeduct = CAN.manageBilling.includes(user.role) && !!check.contractId;
   const showPeople = CAN.manageOccupants.includes(user.role);
@@ -42,7 +55,14 @@ export default async function CheckPage({ params }: PageProps<"/inventory/checks
       />
       <Card className="mb-6">
         <dl className="grid gap-4 sm:grid-cols-4">
-          <Detail label="Checked by">{by?.name}</Detail>
+          <Detail label="Checked by">
+            {by?.name}
+            {by && (
+              <span className={`block text-xs ${scanned ? "text-muted" : "text-attention"}`}>
+                {scanned ? `Scanned the door code ${formatMoment(scanned.at)}` : "Didn't scan the door code"}
+              </span>
+            )}
+          </Detail>
           <Detail label="Signed off by">{check.signedBy}</Detail>
           <Detail label="Stay">{stay ? (showPeople ? stay.name : "A tenant's stay") + `, moved in ${formatDate(stay.checkIn)}` : null}</Detail>
           <Detail label="Contract">{contract?.reference}</Detail>
