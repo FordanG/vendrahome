@@ -7,7 +7,7 @@ import { contractInReach } from "@/lib/hotel";
 import { BILL_TO_LABELS, companyAccount, statementDraft } from "@/lib/billing";
 import { addDaysISO, formatDate, formatPeso, todayISO } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
-import { Card, Detail, Empty, Field, FormGrid, Input, PageHeader, SectionTitle, Select, Table, Td, Th } from "@/components/ui";
+import { Card, Detail, Empty, Field, FormGrid, Input, LinkButton, PageHeader, SectionTitle, Select, Table, Td, Th } from "@/components/ui";
 import { addDepositEntry, issueStatement, reverseDepositEntry, setChargeRule } from "../../actions";
 import { Balance, ChargeForm, Ledger, PaymentForm, ReverseButton, StatusBadge } from "../../parts";
 
@@ -48,6 +48,14 @@ export default async function CompanyAccountPage({ params }: PageProps<"/billing
             <Link className="underline underline-offset-2" href={`/contracts/${contract.id}`}>Contract {contract.reference}</Link>
             <span>{formatDate(contract.startDate)} to {formatDate(contract.endDate)}</span>
           </span>
+        }
+        actions={
+          <>
+            <LinkButton href="#payment">Record a payment</LinkButton>
+            <LinkButton variant="secondary" href="#charge">
+              Add a charge
+            </LinkButton>
+          </>
         }
       />
 
@@ -153,11 +161,11 @@ export default async function CompanyAccountPage({ params }: PageProps<"/billing
         </div>
 
         <div className="min-w-0 space-y-6">
-          <Card>
+          <Card id="payment" className="scroll-mt-20">
             <SectionTitle>Record a payment</SectionTitle>
             <PaymentForm billTo="company" contractId={contract.id} />
           </Card>
-          <Card>
+          <Card id="charge" className="scroll-mt-20">
             <SectionTitle>Add a charge</SectionTitle>
             <p className="mb-3 text-sm text-muted">For the company. For something one tenant should pay, add it on the tenant&apos;s page.</p>
             <ChargeForm types={types} contractId={contract.id} canCredit={isAdmin} fixedPayer="company">

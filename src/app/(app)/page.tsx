@@ -136,7 +136,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
             </li>
           ))}
           {uncovered.map(r => <li key={r.id} className="border-l-4 border-l-attention px-4 py-3">
-            <Link className="underline" href={`/rooms/${r.id}`}>Room {r.number}</Link> has residents but no current active contract. Review coverage.
+            <Link className="underline" href={`/rooms/${r.id}`}>Room {r.number}</Link> has tenants but no active contract covers it. Add the room to a contract.
           </li>)}
           {checkOutsSoon.map((o) => (
             <li key={o.assignmentId} className="border-l-4 border-l-border px-4 py-3 sm:py-2.5">

@@ -31,7 +31,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         <h1 className="mb-2 flex justify-center text-4xl text-sidebar-foreground">
           <Brand />
         </h1>
-        <p className="mb-6 text-center text-sm text-sidebar-muted">For staff and residents</p>
+        <p className="mb-6 text-center text-sm text-sidebar-muted">For staff, tenants and companies</p>
         <Card className="border-0 border-t-4 border-t-brand p-6 shadow-xl sm:p-7">
           <ActionForm action={login} submitLabel="Sign in" pendingLabel="Signing in…">
             {typeof next === "string" && <input type="hidden" name="next" value={next} />}

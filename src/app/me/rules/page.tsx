@@ -1,6 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireTenant } from "@/lib/auth";
+import { RuleBody } from "@/components/rule-body";
 import { tenantHotelId } from "@/lib/portal";
 import { Card, Empty, PageHeader } from "@/components/ui";
 
@@ -16,7 +17,7 @@ export default async function TenantRulesPage() {
 
   return (
     <>
-      <PageHeader title="House rules" subtitle="Please follow these rules throughout your stay. Contact the front desk if you need clarification." />
+      <PageHeader title="House rules" subtitle="Please follow these rules while you stay here. Ask the front desk if anything is unclear." />
       {rules.length === 0 ? (
         <Empty>No house rules have been posted yet.</Empty>
       ) : (
@@ -25,7 +26,7 @@ export default async function TenantRulesPage() {
             {rules.map((r) => (
               <li key={r.id}>
                 <p className="font-medium">{r.title}</p>
-                {r.body && <p className="mt-1 whitespace-pre-wrap text-sm text-muted">{r.body}</p>}
+                {r.body && <RuleBody body={r.body} />}
               </li>
             ))}
           </ol>

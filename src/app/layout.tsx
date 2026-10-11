@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import { BRAND } from "@/lib/brand";
 import { getTheme } from "@/lib/theme";
+import { Toaster } from "@/components/toaster";
 import "./globals.css";
 
 // Vendrato's two families: Inter for reading, Space Grotesk for the logo, headings and room numbers.
@@ -26,7 +27,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const theme = await getTheme();
   return (
     <html lang="en" data-theme={theme === "system" ? undefined : theme} className={`${inter.variable} ${spaceGrotesk.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        {children}
+        <Toaster />
+      </body>
     </html>
   );
 }

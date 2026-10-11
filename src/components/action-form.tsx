@@ -3,6 +3,7 @@
 import { startTransition, useActionState, useEffect, useRef, type ReactNode } from "react";
 import type { ActionState } from "@/lib/action-state";
 import { Button } from "./ui";
+import { showSaved } from "./toaster";
 
 /**
  * A form bound to a server action that shows its error or success message.
@@ -29,12 +30,38 @@ export function ActionForm({
   confirm?: string;
   resetOnSuccess?: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(action, {});
+  // Saving often takes the form off the page (a request leaves its list, a move-in is done),
+  // and the new page arrives together with the result, so the form never shows its message.
+  // When that happens, the message shows at the top of the screen instead.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const [state, formAction, pending] = useActionState(async (previous: ActionState, fd: FormData) => {
+    const result = await action(previous, fd);
+    if (result.ok) {
+      const text = result.ok;
+      let shown = false;
+      for (const wait of [400, 1500])
+        setTimeout(() => {
+          if (!shown && !mounted.current) {
+            shown = true;
+            showSaved(text);
+          }
+        }, wait);
+    }
+    return result;
+  }, {});
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (resetOnSuccess && state.ok) formRef.current?.reset();
   }, [state, resetOnSuccess]);
+
+
 
   return (
     <form

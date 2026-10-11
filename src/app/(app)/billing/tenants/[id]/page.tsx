@@ -6,7 +6,7 @@ import { CAN, requireStaff } from "@/lib/auth";
 import { occupantInReach } from "@/lib/hotel";
 import { occupantAccount } from "@/lib/billing";
 import { getCurrentStay } from "@/lib/portal";
-import { Card, Detail, PageHeader, SectionTitle } from "@/components/ui";
+import { Card, Detail, LinkButton, PageHeader, SectionTitle } from "@/components/ui";
 import { Balance, ChargeForm, Ledger, PaymentForm } from "../../parts";
 
 export default async function TenantAccountPage({ params }: PageProps<"/billing/tenants/[id]">) {
@@ -33,6 +33,14 @@ export default async function TenantAccountPage({ params }: PageProps<"/billing/
             <span>{stay ? `Room ${stay.room.number}` : "No current room"}</span>
           </span>
         }
+        actions={
+          <>
+            <LinkButton href="#payment">Record a payment</LinkButton>
+            <LinkButton variant="secondary" href="#charge">
+              Add a charge
+            </LinkButton>
+          </>
+        }
       />
       <Card className="mb-6">
         <dl className="grid gap-4 sm:grid-cols-3">
@@ -48,11 +56,11 @@ export default async function TenantAccountPage({ params }: PageProps<"/billing/
           <Ledger charges={account.charges} payments={account.payments} canRecord canManage={isAdmin} />
         </section>
         <div className="min-w-0 space-y-6">
-          <Card>
+          <Card id="charge" className="scroll-mt-20">
             <SectionTitle>Add a charge</SectionTitle>
             <ChargeForm types={types} occupantId={occupant.id} canCredit={isAdmin} />
           </Card>
-          <Card>
+          <Card id="payment" className="scroll-mt-20">
             <SectionTitle>Record a payment</SectionTitle>
             <PaymentForm billTo="occupant" occupantId={occupant.id} />
           </Card>

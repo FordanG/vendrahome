@@ -8,7 +8,7 @@ import { requireHotel, roomInReach } from "@/lib/hotel";
 import { CATEGORY_LABELS, CHECK_KIND_LABELS, CONDITION_LABELS, CONDITION_TONES, itemsIn, nextServiceDate } from "@/lib/inventory";
 import { addDaysISO, centavosToInput, formatDate, formatPeso, todayISO } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
-import { Badge, Card, Empty, Field, FormGrid, Input, PageHeader, SectionTitle, Select, Textarea } from "@/components/ui";
+import { Badge, Card, Empty, Field, FormGrid, Input, LinkButton, PageHeader, SectionTitle, Select, Textarea } from "@/components/ui";
 import { addItem, markServiced, moveItem, recordCheck, retireItem, setItemCondition, updateItem } from "../../actions";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -70,6 +70,7 @@ export default async function RoomInventoryPage({ params, searchParams }: PagePr
             </span>
           )
         }
+        actions={!storeroom && items.length > 0 && <LinkButton href="#check">Check this room</LinkButton>}
       />
 
       <div className="grid gap-6 lg:grid-cols-5">
@@ -251,60 +252,66 @@ function ItemCard({
             )}
           </ActionForm>
         </Action>
-        {item.serviceEveryMonths && (
-          <Action label="Record service">
-            <ActionForm action={markServiced.bind(null, item.id)} submitLabel="Save">
-              <Field label="Serviced on">
-                <Input name="date" type="date" defaultValue={today} max={today} required />
-              </Field>
-              <Field label="Note">
-                <Input name="note" placeholder="e.g. Filter cleaned" />
-              </Field>
-            </ActionForm>
-          </Action>
-        )}
-        {canManage && (
-          <>
-            <Action label="Edit details">
-              <ActionForm action={updateItem.bind(null, item.id)}>
-                <ItemFields item={item} />
-              </ActionForm>
-            </Action>
-            <Action label="Move">
-              <ActionForm action={moveItem.bind(null, item.id)} submitLabel="Move">
-                <Field label="Move to">
-                  <Select name="toRoomId" defaultValue="">
-                    <option value="" disabled>Pick a room</option>
-                    {!storeroom && <option value="storeroom">Storeroom</option>}
-                    {rooms.map((r) => <option key={r.id} value={r.id}>Room {r.number}</option>)}
-                  </Select>
-                </Field>
-                <Field label="Note">
-                  <Input name="note" placeholder="e.g. Swapped for repair" />
-                </Field>
-              </ActionForm>
-            </Action>
-            <Action label="Remove from inventory">
-              <ActionForm action={retireItem.bind(null, item.id)} submitLabel="Remove" submitVariant="danger">
-                <p className="text-sm text-muted">For items thrown away, sold or beyond repair. Its history is kept.</p>
-                <Field label="Why">
-                  <Input name="reason" required />
-                </Field>
-              </ActionForm>
-            </Action>
-          </>
-        )}
-        {events.length > 0 && (
-          <Action label="History">
-            <ul className="space-y-1 text-xs text-muted">
-              {events.map(({ e, by }) => (
-                <li key={e.id}>
-                  {e.at.toLocaleDateString("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", year: "numeric" })}:{" "}
-                  {EVENT_LABELS[e.kind]}{e.condition && e.kind === "condition" ? ` ${CONDITION_LABELS[e.condition].toLowerCase()}` : ""}
-                  {e.note && `. ${e.note}`}{by && ` (${by})`}
-                </li>
-              ))}
-            </ul>
+        {(item.serviceEveryMonths || canManage || events.length > 0) && (
+          <Action label="More">
+            <div className="flex flex-col gap-1 text-sm">
+              {item.serviceEveryMonths && (
+                <Action label="Record service">
+                  <ActionForm action={markServiced.bind(null, item.id)} submitLabel="Save">
+                    <Field label="Serviced on">
+                      <Input name="date" type="date" defaultValue={today} max={today} required />
+                    </Field>
+                    <Field label="Note">
+                      <Input name="note" placeholder="e.g. Filter cleaned" />
+                    </Field>
+                  </ActionForm>
+                </Action>
+              )}
+              {canManage && (
+                <>
+                  <Action label="Edit details">
+                    <ActionForm action={updateItem.bind(null, item.id)}>
+                      <ItemFields item={item} />
+                    </ActionForm>
+                  </Action>
+                  <Action label="Move">
+                    <ActionForm action={moveItem.bind(null, item.id)} submitLabel="Move">
+                      <Field label="Move to">
+                        <Select name="toRoomId" defaultValue="">
+                          <option value="" disabled>Pick a room</option>
+                          {!storeroom && <option value="storeroom">Storeroom</option>}
+                          {rooms.map((r) => <option key={r.id} value={r.id}>Room {r.number}</option>)}
+                        </Select>
+                      </Field>
+                      <Field label="Note">
+                        <Input name="note" placeholder="e.g. Swapped for repair" />
+                      </Field>
+                    </ActionForm>
+                  </Action>
+                  <Action label="Remove from inventory">
+                    <ActionForm action={retireItem.bind(null, item.id)} submitLabel="Remove" submitVariant="danger">
+                      <p className="text-sm text-muted">For items thrown away, sold or beyond repair. Its history is kept.</p>
+                      <Field label="Why">
+                        <Input name="reason" required />
+                      </Field>
+                    </ActionForm>
+                  </Action>
+                </>
+              )}
+              {events.length > 0 && (
+                <Action label="History">
+                  <ul className="space-y-1 text-xs text-muted">
+                    {events.map(({ e, by }) => (
+                      <li key={e.id}>
+                        {e.at.toLocaleDateString("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", year: "numeric" })}:{" "}
+                        {EVENT_LABELS[e.kind]}{e.condition && e.kind === "condition" ? ` ${CONDITION_LABELS[e.condition].toLowerCase()}` : ""}
+                        {e.note && `. ${e.note}`}{by && ` (${by})`}
+                      </li>
+                    ))}
+                  </ul>
+                </Action>
+              )}
+            </div>
           </Action>
         )}
       </div>
