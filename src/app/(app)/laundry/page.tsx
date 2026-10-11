@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, ne, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { inHotelRooms, requireHotel } from "@/lib/hotel";
 import { addDaysISO, formatDate, formatMoment, formatPeso, manilaDate, todayISO } from "@/lib/format";
 import { CLAIM_KIND_LABELS, formatKilos, loadLabel } from "@/lib/laundry";
 import { ActionForm } from "@/components/action-form";
@@ -27,7 +28,7 @@ function Who({ row }: { row: Row }) {
 }
 
 export default async function LaundryPage() {
-  const user = await requireStaff(CAN.handleLaundry);
+  const { user, hotel } = await requireHotel(CAN.handleLaundry);
   const seeMargin = CAN.manageLaundryRates.includes(user.role);
   const today = todayISO();
   const monthStart = today.slice(0, 8) + "01";
@@ -46,18 +47,18 @@ export default async function LaundryPage() {
     .innerJoin(schema.laundryServices, eq(schema.laundryLoads.serviceId, schema.laundryServices.id))
     .leftJoin(schema.rooms, eq(schema.laundryLoads.roomId, schema.rooms.id));
   const [open, recent, services, residents, claims, month] = await Promise.all([
-    loadQuery().where(inArray(schema.laundryLoads.status, ["at_desk", "at_shop", "ready"])).orderBy(asc(schema.laundryLoads.number)),
+    loadQuery().where(and(eq(schema.laundryServices.propertyId, hotel.id), inArray(schema.laundryLoads.status, ["at_desk", "at_shop", "ready"]))).orderBy(asc(schema.laundryLoads.number)),
     loadQuery()
-      .where(and(eq(schema.laundryLoads.status, "collected"), gte(schema.laundryLoads.collectedAt, new Date(addDaysISO(today, -8) + "T16:00:00Z"))))
+      .where(and(eq(schema.laundryServices.propertyId, hotel.id), eq(schema.laundryLoads.status, "collected"), gte(schema.laundryLoads.collectedAt, new Date(addDaysISO(today, -8) + "T16:00:00Z"))))
       .orderBy(desc(schema.laundryLoads.collectedAt))
       .limit(50),
-    db.select().from(schema.laundryServices).where(eq(schema.laundryServices.active, true)).orderBy(asc(schema.laundryServices.position), asc(schema.laundryServices.name)),
+    db.select().from(schema.laundryServices).where(and(eq(schema.laundryServices.propertyId, hotel.id), eq(schema.laundryServices.active, true))).orderBy(asc(schema.laundryServices.position), asc(schema.laundryServices.name)),
     db
       .select({ id: schema.occupants.id, name: schema.occupants.fullName, room: schema.rooms.number })
       .from(schema.roomAssignments)
       .innerJoin(schema.occupants, eq(schema.roomAssignments.occupantId, schema.occupants.id))
       .innerJoin(schema.rooms, eq(schema.roomAssignments.roomId, schema.rooms.id))
-      .where(and(lte(schema.roomAssignments.checkIn, today), or(isNull(schema.roomAssignments.actualCheckOut), gt(schema.roomAssignments.actualCheckOut, today))))
+      .where(and(eq(schema.rooms.propertyId, hotel.id), lte(schema.roomAssignments.checkIn, today), or(isNull(schema.roomAssignments.actualCheckOut), gt(schema.roomAssignments.actualCheckOut, today))))
       .orderBy(asc(schema.rooms.number), asc(schema.occupants.fullName)),
     db
       .select({ c: schema.laundryClaims, number: schema.laundryLoads.number, name: schema.occupants.fullName, roomNumber: schema.rooms.number })
@@ -65,12 +66,12 @@ export default async function LaundryPage() {
       .innerJoin(schema.laundryLoads, eq(schema.laundryClaims.loadId, schema.laundryLoads.id))
       .innerJoin(schema.occupants, eq(schema.laundryLoads.occupantId, schema.occupants.id))
       .leftJoin(schema.rooms, eq(schema.laundryLoads.roomId, schema.rooms.id))
-      .where(eq(schema.laundryClaims.status, "open"))
+      .where(and(eq(schema.laundryClaims.status, "open"), inHotelRooms(schema.laundryLoads.roomId, hotel.id)))
       .orderBy(asc(schema.laundryClaims.createdAt)),
     db
       .select({ grams: schema.laundryLoads.grams, amount: schema.laundryLoads.amount, cost: schema.laundryLoads.cost })
       .from(schema.laundryLoads)
-      .where(and(ne(schema.laundryLoads.status, "cancelled"), gte(schema.laundryLoads.returnedAt, new Date(addDaysISO(monthStart, -1) + "T16:00:00Z")))),
+      .where(and(inHotelRooms(schema.laundryLoads.roomId, hotel.id), ne(schema.laundryLoads.status, "cancelled"), gte(schema.laundryLoads.returnedAt, new Date(addDaysISO(monthStart, -1) + "T16:00:00Z")))),
   ]);
   const atDesk = open.filter((r) => r.l.status === "at_desk");
   const atShop = open.filter((r) => r.l.status === "at_shop");

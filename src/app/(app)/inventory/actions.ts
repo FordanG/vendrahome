@@ -4,6 +4,8 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { InventoryCheckKind, ItemCategory, ItemCondition } from "@/db/schema";
 import { CAN, requireStaff } from "@/lib/auth";
+import { canUseHotel, isOwner, requireHotel, roomInReach } from "@/lib/hotel";
+import type { Staff } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import { mutate } from "@/lib/mutations";
 import { addDaysISO, formatDate, formatPeso, isISODate, parsePeso, str, todayISO } from "@/lib/format";
@@ -61,18 +63,25 @@ async function tagTaken(tagCode: string | null, exceptId?: string) {
   return !!other && other.id !== exceptId;
 }
 
-/** Adds an item to a room, or to the storeroom when roomId is null. */
+/** An item that is still in use, in a hotel this login can reach. */
+async function itemInReach(user: Staff, itemId: string) {
+  const item = await (await getDb()).query.roomItems.findFirst({ where: eq(schema.roomItems.id, itemId) });
+  return item && !item.retiredOn && canUseHotel(user, item.propertyId) ? item : null;
+}
+
+/** Adds an item to a room, or to the storeroom of the hotel being looked at when roomId is null. */
 export async function addItem(roomId: string | null, _: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async () => {
-    const user = await requireStaff(CAN.manageInventory);
+    const { user, hotel } = await requireHotel(CAN.manageInventory);
     const parsed = readItem(fd);
     if ("error" in parsed) return parsed;
     const db = await getDb();
-    if (roomId && !(await db.query.rooms.findFirst({ where: eq(schema.rooms.id, roomId) }))) return { error: "Room not found." };
+    const room = roomId ? await roomInReach(user, roomId) : null;
+    if (roomId && !room) return { error: "Room not found." };
     if (await tagTaken(parsed.value.tagCode)) return { error: `Tag ${parsed.value.tagCode} is already on another item.` };
     const photo = await savePhoto("inventory", fd.get("photo"), user.id);
     if (photo && "error" in photo) return photo;
-    const [item] = await db.insert(schema.roomItems).values({ ...parsed.value, roomId, photoId: photo?.id ?? null }).returning();
+    const [item] = await db.insert(schema.roomItems).values({ ...parsed.value, roomId, propertyId: room?.propertyId ?? hotel.id, photoId: photo?.id ?? null }).returning();
     await db.insert(schema.itemEvents).values({ itemId: item.id, kind: "added", toRoomId: roomId, condition: item.condition, staffId: user.id });
     await audit(user.id, "create", "room_item", item.id, { ...item });
     return { ok: `${item.name} added.` };
@@ -85,8 +94,8 @@ export async function updateItem(itemId: string, _: ActionState, fd: FormData): 
     const parsed = readItem(fd);
     if ("error" in parsed) return parsed;
     const db = await getDb();
-    const before = await db.query.roomItems.findFirst({ where: eq(schema.roomItems.id, itemId) });
-    if (!before || before.retiredOn) return { error: "Item not found." };
+    const before = await itemInReach(user, itemId);
+    if (!before) return { error: "Item not found." };
     if (await tagTaken(parsed.value.tagCode, itemId)) return { error: `Tag ${parsed.value.tagCode} is already on another item.` };
     const photo = await savePhoto("inventory", fd.get("photo"), user.id);
     if (photo && "error" in photo) return photo;
@@ -105,8 +114,8 @@ export async function setItemCondition(itemId: string, _: ActionState, fd: FormD
   return mutate(async () => {
     const user = await requireStaff(CAN.viewInventory);
     const db = await getDb();
-    const item = await db.query.roomItems.findFirst({ where: eq(schema.roomItems.id, itemId) });
-    if (!item || item.retiredOn) return { error: "Item not found." };
+    const item = await itemInReach(user, itemId);
+    if (!item) return { error: "Item not found." };
     const condition = String(fd.get("condition")) as ItemCondition;
     if (!CONDITIONS.includes(condition)) return { error: "Pick the item's condition." };
     const note = str(fd.get("note"));
@@ -136,8 +145,8 @@ export async function markServiced(itemId: string, _: ActionState, fd: FormData)
   return mutate(async () => {
     const user = await requireStaff(CAN.viewInventory);
     const db = await getDb();
-    const item = await db.query.roomItems.findFirst({ where: eq(schema.roomItems.id, itemId) });
-    if (!item || item.retiredOn) return { error: "Item not found." };
+    const item = await itemInReach(user, itemId);
+    if (!item) return { error: "Item not found." };
     const date = str(fd.get("date")) ?? todayISO();
     if (!isISODate(date) || date > todayISO()) return { error: "The service date must be today or earlier." };
     const note = str(fd.get("note"));
@@ -153,14 +162,16 @@ export async function moveItem(itemId: string, _: ActionState, fd: FormData): Pr
   return mutate(async () => {
     const user = await requireStaff(CAN.manageInventory);
     const db = await getDb();
-    const item = await db.query.roomItems.findFirst({ where: eq(schema.roomItems.id, itemId) });
-    if (!item || item.retiredOn) return { error: "Item not found." };
+    const item = await itemInReach(user, itemId);
+    if (!item) return { error: "Item not found." };
     const to = str(fd.get("toRoomId"));
     const toRoomId = to === "storeroom" ? null : to;
-    if (toRoomId && !(await db.query.rooms.findFirst({ where: eq(schema.rooms.id, toRoomId) }))) return { error: "Pick where it's going." };
+    const toRoom = toRoomId ? await roomInReach(user, toRoomId) : null;
+    if (toRoomId && !toRoom) return { error: "Pick where it's going." };
     if (toRoomId === item.roomId) return { error: "It's already there." };
     const note = str(fd.get("note"));
-    await db.update(schema.roomItems).set({ roomId: toRoomId }).where(eq(schema.roomItems.id, itemId));
+    // The storeroom is the item's own hotel's; a room elsewhere moves it to that hotel.
+    await db.update(schema.roomItems).set({ roomId: toRoomId, propertyId: toRoom?.propertyId ?? item.propertyId }).where(eq(schema.roomItems.id, itemId));
     await db.insert(schema.itemEvents).values({ itemId, kind: "moved", fromRoomId: item.roomId, toRoomId, note, staffId: user.id });
     await audit(user.id, "move", "room_item", itemId, { from: item.roomId, to: toRoomId, note });
     return { ok: "Moved." };
@@ -172,8 +183,8 @@ export async function retireItem(itemId: string, _: ActionState, fd: FormData): 
   return mutate(async () => {
     const user = await requireStaff(CAN.manageInventory);
     const db = await getDb();
-    const item = await db.query.roomItems.findFirst({ where: eq(schema.roomItems.id, itemId) });
-    if (!item || item.retiredOn) return { error: "Item not found." };
+    const item = await itemInReach(user, itemId);
+    if (!item) return { error: "Item not found." };
     const reason = str(fd.get("reason"));
     if (!reason) return { error: "Say why, e.g. \"Beyond repair\"." };
     await db.update(schema.roomItems).set({ retiredOn: todayISO() }).where(eq(schema.roomItems.id, itemId));
@@ -191,7 +202,7 @@ export async function recordCheck(roomId: string, _: ActionState, fd: FormData):
   return mutate(async () => {
     const user = await requireStaff(CAN.viewInventory);
     const db = await getDb();
-    const room = await db.query.rooms.findFirst({ where: eq(schema.rooms.id, roomId) });
+    const room = await roomInReach(user, roomId);
     if (!room) return { error: "Room not found." };
     const kind = String(fd.get("kind")) as InventoryCheckKind;
     if (!CHECK_KINDS.includes(kind)) return { error: "Pick what kind of check this is." };
@@ -246,10 +257,10 @@ export async function recordCheck(roomId: string, _: ActionState, fd: FormData):
   });
 }
 
-async function findDifference(checkId: string, lineId: string) {
+async function findDifference(user: Staff, checkId: string, lineId: string) {
   const db = await getDb();
   const check = await db.query.inventoryChecks.findFirst({ where: eq(schema.inventoryChecks.id, checkId) });
-  if (!check) return null;
+  if (!check || !(await roomInReach(user, check.roomId))) return null;
   const { differences } = await checkDifferences(check);
   const diff = differences.find((d) => d.line.id === lineId);
   return diff ? { check, diff } : null;
@@ -260,7 +271,7 @@ export async function chargeDifference(checkId: string, lineId: string, _: Actio
   return mutate(async () => {
     const user = await requireStaff(CAN.recordBilling);
     const db = await getDb();
-    const found = await findDifference(checkId, lineId);
+    const found = await findDifference(user, checkId, lineId);
     if (!found) return { error: "Nothing to charge for this item." };
     const { check, diff } = found;
     if (diff.line.chargeId || diff.line.depositEntryId) return { error: "This was already charged or deducted." };
@@ -296,7 +307,7 @@ export async function deductDifference(checkId: string, lineId: string, _: Actio
   return mutate(async () => {
     const user = await requireStaff(CAN.manageBilling);
     const db = await getDb();
-    const found = await findDifference(checkId, lineId);
+    const found = await findDifference(user, checkId, lineId);
     if (!found) return { error: "Nothing to deduct for this item." };
     const { check, diff } = found;
     if (diff.line.chargeId || diff.line.depositEntryId) return { error: "This was already charged or deducted." };
@@ -367,7 +378,9 @@ export async function applyTemplates(roomTypeId: string): Promise<ActionState> {
     const db = await getDb();
     const templates = await db.select().from(schema.itemTemplates).where(eq(schema.itemTemplates.roomTypeId, roomTypeId)).orderBy(asc(schema.itemTemplates.position));
     if (templates.length === 0) return { error: "Add items to the standard list first." };
-    const rooms = await db.select().from(schema.rooms).where(eq(schema.rooms.roomTypeId, roomTypeId));
+    // Room types are shared; a hotel's own admin fills only their own hotel's rooms.
+    const rooms = await db.select().from(schema.rooms)
+      .where(and(eq(schema.rooms.roomTypeId, roomTypeId), isOwner(user) ? undefined : eq(schema.rooms.propertyId, user.propertyId!)));
     if (rooms.length === 0) return { error: "No rooms have this type yet." };
     let added = 0;
     for (const room of rooms) {
@@ -376,7 +389,7 @@ export async function applyTemplates(roomTypeId: string): Promise<ActionState> {
       const missing = templates.filter((t) => !have.has(t.name.toLowerCase()));
       if (missing.length === 0) continue;
       const items = await db.insert(schema.roomItems).values(missing.map((t) => ({
-        roomId: room.id, name: t.name, category: t.category, quantity: t.quantity, replacementCost: t.replacementCost, serviceEveryMonths: t.serviceEveryMonths,
+        roomId: room.id, propertyId: room.propertyId, name: t.name, category: t.category, quantity: t.quantity, replacementCost: t.replacementCost, serviceEveryMonths: t.serviceEveryMonths,
       }))).returning({ id: schema.roomItems.id });
       await db.insert(schema.itemEvents).values(items.map((i) => ({ itemId: i.id, kind: "added" as const, toRoomId: room.id, condition: "good" as const, note: "From the standard list", staffId: user.id })));
       added += items.length;

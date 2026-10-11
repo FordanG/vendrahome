@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { RoomItem } from "@/db/schema";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel, roomInReach } from "@/lib/hotel";
 import { CATEGORY_LABELS, CHECK_KIND_LABELS, CONDITION_LABELS, CONDITION_TONES, itemsIn, nextServiceDate } from "@/lib/inventory";
 import { addDaysISO, centavosToInput, formatDate, formatPeso, todayISO } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
@@ -13,7 +14,7 @@ import { addItem, markServiced, moveItem, recordCheck, retireItem, setItemCondit
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export default async function RoomInventoryPage({ params, searchParams }: PageProps<"/inventory/rooms/[id]">) {
-  const user = await requireStaff(CAN.viewInventory);
+  const { user, hotel } = await requireHotel(CAN.viewInventory);
   const canManage = CAN.manageInventory.includes(user.role);
   const { id } = await params;
   // Opened from the door code with the kind of check already chosen.
@@ -21,13 +22,13 @@ export default async function RoomInventoryPage({ params, searchParams }: PagePr
   const storeroom = id === "storeroom";
   if (!storeroom && !UUID.test(id)) notFound();
   const db = await getDb();
-  const room = storeroom ? null : await db.query.rooms.findFirst({ where: eq(schema.rooms.id, id) });
+  const room = storeroom ? null : await roomInReach(user, id);
   if (!storeroom && !room) notFound();
   const roomId = room?.id ?? null;
   const today = todayISO();
 
   const [items, roomType, checks, stays, allRooms] = await Promise.all([
-    itemsIn(roomId),
+    itemsIn(roomId, hotel.id),
     room?.roomTypeId ? db.query.roomTypes.findFirst({ where: eq(schema.roomTypes.id, room.roomTypeId) }) : null,
     roomId
       ? db.select({ check: schema.inventoryChecks, by: schema.staff.name }).from(schema.inventoryChecks)
@@ -41,7 +42,7 @@ export default async function RoomInventoryPage({ params, searchParams }: PagePr
           .where(eq(schema.roomAssignments.roomId, roomId))
           .orderBy(desc(schema.roomAssignments.checkIn)).limit(15)
       : [],
-    canManage ? db.select({ id: schema.rooms.id, number: schema.rooms.number }).from(schema.rooms).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)) : [],
+    canManage ? db.select({ id: schema.rooms.id, number: schema.rooms.number }).from(schema.rooms).where(eq(schema.rooms.propertyId, room?.propertyId ?? hotel.id)).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)) : [],
   ]);
   const events = items.length
     ? await db.select({ e: schema.itemEvents, by: schema.staff.name }).from(schema.itemEvents)

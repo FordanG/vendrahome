@@ -95,9 +95,9 @@ export default async function CompanyPersonPage({ params }: PageProps<"/company/
                     <Field label="Room">
                       <Select name="roomId" required defaultValue="">
                         <option value="">Pick a room</option>
-                        {rooms.map(({ room, free }) => (
+                        {rooms.map(({ room, hotel, free }) => (
                           <option key={room.id} value={room.id} disabled={free === 0}>
-                            Room {room.number}, floor {room.floor} ({free > 0 ? `${free} ${free === 1 ? "bed" : "beds"} free` : "full"})
+                            {hotel}, room {room.number}, floor {room.floor} ({free > 0 ? `${free} ${free === 1 ? "bed" : "beds"} free` : "full"})
                           </option>
                         ))}
                       </Select>

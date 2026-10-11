@@ -1,6 +1,7 @@
 import "server-only";
 import { and, desc, eq, ne, or, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { inHotelAreas, inHotelRooms, roomInReach } from "./hotel";
 import type { Staff, TenantRequest, MaintenanceVisit } from "@/db/schema";
 
 export function canHandleRequest(user: Pick<Staff, "id" | "role">, request: Pick<TenantRequest, "kind" | "assigneeId">) {
@@ -33,8 +34,9 @@ export async function syncRequestVisit(request: TenantRequest, actorId: string) 
   }
 }
 
-export async function visitPermission(user: Pick<Staff, "id" | "role">, visit: MaintenanceVisit): Promise<string | null> {
+export async function visitPermission(user: Pick<Staff, "id" | "role" | "propertyId">, visit: MaintenanceVisit): Promise<string | null> {
   const db = await getDb();
+  if (!(await roomInReach(user, visit.roomId))) return "Visit not found.";
   if (!visit.requestId) return user.role === "maintenance" && visit.assigneeId && visit.assigneeId !== user.id
     ? "This visit is assigned to another staff member." : null;
   const request = await db.query.tenantRequests.findFirst({ where: eq(schema.tenantRequests.id, visit.requestId) });
@@ -58,10 +60,14 @@ export async function syncVisitRequest(visit: MaintenanceVisit, user: Pick<Staff
   }).where(eq(schema.tenantRequests.id, visit.requestId));
 }
 
-/** The requests a hotel login works on. Requests still waiting for a company's OK aren't the hotel's yet. */
-export function requestScope(user: Pick<Staff, "id" | "role">) {
+/**
+ * The requests a hotel login works on, in one hotel when `hotelId` is given.
+ * Requests still waiting for a company's OK aren't the hotel's yet.
+ */
+export function requestScope(user: Pick<Staff, "id" | "role">, hotelId?: string) {
   return and(
     eq(schema.tenantRequests.awaitingCompany, false),
+    hotelId ? or(inHotelRooms(schema.tenantRequests.roomId, hotelId), inHotelAreas(schema.tenantRequests.areaId, hotelId)) : undefined,
     user.role === "maintenance" ? and(ne(schema.tenantRequests.kind, "laundry"),
       or(isNull(schema.tenantRequests.assigneeId), eq(schema.tenantRequests.assigneeId, user.id))) : undefined,
   );

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { asc, eq } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { occupantInReach } from "@/lib/hotel";
 import { occupantAccount } from "@/lib/billing";
 import { getCurrentStay } from "@/lib/portal";
 import { Card, Detail, PageHeader, SectionTitle } from "@/components/ui";
@@ -13,7 +14,7 @@ export default async function TenantAccountPage({ params }: PageProps<"/billing/
   const isAdmin = CAN.manageBilling.includes(user.role);
   const { id } = await params;
   const db = await getDb();
-  const occupant = await db.query.occupants.findFirst({ where: eq(schema.occupants.id, id) });
+  const occupant = await occupantInReach(user, id);
   if (!occupant) notFound();
   const [account, stay, types] = await Promise.all([
     occupantAccount(id),

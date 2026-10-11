@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { canUseHotel } from "@/lib/hotel";
 import { formatMoment } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
 import { Badge, Button, Card, Detail, Field, PageHeader, SectionTitle, Textarea } from "@/components/ui";
@@ -10,7 +11,7 @@ import { cancelCleaning, saveCleaning } from "../../actions";
 
 /** One cleaning: tick the steps while working, then finish. */
 export default async function CleaningPage({ params }: PageProps<"/housekeeping/cleanings/[id]">) {
-  await requireStaff(CAN.cleanRooms);
+  const user = await requireStaff(CAN.cleanRooms);
   const { id } = await params;
   const db = await getDb();
   const [row] = await db
@@ -20,7 +21,7 @@ export default async function CleaningPage({ params }: PageProps<"/housekeeping/
     .leftJoin(schema.staff, eq(schema.cleanings.staffId, schema.staff.id))
     .leftJoin(schema.roomCheckIns, eq(schema.cleanings.checkInId, schema.roomCheckIns.id))
     .where(eq(schema.cleanings.id, id));
-  if (!row) notFound();
+  if (!row || !canUseHotel(user, row.room.propertyId)) notFound();
   const { c, room, name, scannedAt } = row;
   const finished = !!c.finishedAt;
 

@@ -111,12 +111,18 @@ export async function getCurrentStay(occupantId: string) {
   return row ?? null;
 }
 
-/** Every weekly entry, sorted by day and time, with room numbers. */
-export async function getSchedule() {
+/** One hotel's weekly entries, sorted by day and time, with room numbers. */
+export async function getSchedule(hotelId: string) {
   const db = await getDb();
   return db
     .select({ e: schema.weeklySchedule, roomNumber: schema.rooms.number })
     .from(schema.weeklySchedule)
     .leftJoin(schema.rooms, eq(schema.weeklySchedule.roomId, schema.rooms.id))
+    .where(eq(schema.weeklySchedule.propertyId, hotelId))
     .orderBy(asc(schema.weeklySchedule.weekday), asc(schema.weeklySchedule.startTime));
+}
+
+/** The hotel a tenant lives at: their current room's, or the last one they were placed in. */
+export async function tenantHotelId(occupant: { id: string; propertyId: string | null }) {
+  return (await getCurrentStay(occupant.id))?.room.propertyId ?? occupant.propertyId;
 }

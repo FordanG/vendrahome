@@ -22,7 +22,7 @@ async function main() {
     ["Fe Desk", FRONT_DESK, "front_desk"],
     ["Max Fix", MAINTENANCE, "maintenance"],
   ] as const) {
-    await db.query("insert into staff (name, username, password_hash, role) values ($1, $2, $3, $4)", [
+    await db.query("insert into staff (name, username, password_hash, role, property_id) values ($1, $2, $3, $4, (select id from properties limit 1))", [
       name,
       account.username,
       await bcrypt.hash(account.password, 10),
@@ -56,11 +56,11 @@ async function main() {
   ]);
   const { rows: [client] } = await db.query<{ id: string }>("insert into clients (name) values ('E2E Company') returning id");
   const { rows: [contract] } = await db.query<{ id: string }>(
-    "insert into contracts (client_id, reference, start_date, end_date, monthly_rent, status) values ($1, 'E2E Contract', $2, $3, 1000000, 'active') returning id",
+    "insert into contracts (client_id, property_id, reference, start_date, end_date, monthly_rent, status) values ($1, (select id from properties limit 1), 'E2E Contract', $2, $3, 1000000, 'active') returning id",
     [client.id, addDaysISO(todayISO(), -90), addDaysISO(todayISO(), 365)],
   );
   await db.query("insert into contract_rooms (contract_id, room_id) select $1, id from rooms", [contract.id]);
-  await db.query("update occupants set client_id = $1", [client.id]);
+  await db.query("update occupants set client_id = $1, property_id = (select id from properties limit 1)", [client.id]);
   await db.query("update room_assignments set contract_id = $1", [contract.id]);
   await db.query("insert into staff (name, username, password_hash, role, client_id) values ('Hana Reyes', $1, $2, 'company_admin', $3)", [
     COMPANY_ADMIN.username,

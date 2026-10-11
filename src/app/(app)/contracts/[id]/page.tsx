@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { contractInReach } from "@/lib/hotel";
 import { daysBetween, formatDate, formatPeso, todayISO } from "@/lib/format";
 import { contractMonthOf, contractMonths, contractTotal, rentForMonth, rentSchedule, type RentPeriod } from "@/lib/rent";
 import { ActionForm } from "@/components/action-form";
@@ -39,7 +40,7 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
   const user = await requireStaff(CAN.viewClients);
   const { id } = await params;
   const db = await getDb();
-  const contract = await db.query.contracts.findFirst({ where: eq(schema.contracts.id, id) });
+  const contract = await contractInReach(user, id);
   if (!contract) notFound();
 
   const [client, clients, steps, contractRooms, allRooms, stays] = await Promise.all([
@@ -52,7 +53,7 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
       .innerJoin(schema.rooms, eq(schema.contractRooms.roomId, schema.rooms.id))
       .where(eq(schema.contractRooms.contractId, id))
       .orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
-    db.select().from(schema.rooms).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
+    db.select().from(schema.rooms).where(eq(schema.rooms.propertyId, contract.propertyId)).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
     db
       .select({ roomId: schema.roomAssignments.roomId })
       .from(schema.roomAssignments)

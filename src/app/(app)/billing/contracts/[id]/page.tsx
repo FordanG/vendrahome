@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { contractInReach } from "@/lib/hotel";
 import { BILL_TO_LABELS, companyAccount, statementDraft } from "@/lib/billing";
 import { addDaysISO, formatDate, formatPeso, todayISO } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
@@ -17,7 +18,7 @@ export default async function CompanyAccountPage({ params }: PageProps<"/billing
   const isAdmin = CAN.manageBilling.includes(user.role);
   const { id } = await params;
   const db = await getDb();
-  const contract = await db.query.contracts.findFirst({ where: eq(schema.contracts.id, id) });
+  const contract = await contractInReach(user, id);
   if (!contract || contract.status === "draft") notFound();
   const today = todayISO();
   const [client, account, draft, types, rules, rooms] = await Promise.all([

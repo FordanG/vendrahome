@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, asc, desc, eq, gt, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { canUseHotel } from "@/lib/hotel";
 import { audit } from "@/lib/audit";
 import { formatMoment, str } from "@/lib/format";
 import { mutate } from "@/lib/mutations";
@@ -16,8 +17,10 @@ import type { CheckInPurpose, Room, Staff } from "@/db/schema";
 const REPEAT_WINDOW_MS = 10 * 60_000;
 const GONE = "This code no longer works. Ask the front desk for the room's new code.";
 
-async function roomFor(token: string) {
-  return (await getDb()).query.rooms.findFirst({ where: eq(schema.rooms.qrToken, token) });
+/** The room behind a door code, if it's in a hotel this login works at. */
+async function roomFor(user: Staff, token: string) {
+  const room = await (await getDb()).query.rooms.findFirst({ where: eq(schema.rooms.qrToken, token) });
+  return room && canUseHotel(user, room.propertyId) ? room : undefined;
 }
 
 /** Records a check-in, or returns the one this person made for the same thing a few minutes ago. */
@@ -45,7 +48,7 @@ async function recordCheckIn(user: Staff, room: Room, purpose: CheckInPurpose, v
 export async function checkIn(token: string, _: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async () => {
     const user = await requireStaff(CAN.checkInAtRooms);
-    const room = await roomFor(token);
+    const room = await roomFor(user, token);
     if (!room) return { error: GONE };
     const visitId = str(fd.get("visitId"));
     if (visitId) {
@@ -63,7 +66,7 @@ export async function checkIn(token: string, _: ActionState, fd: FormData): Prom
 export async function finishVisit(token: string, visitId: string): Promise<ActionState> {
   return mutate(async () => {
     const user = await requireStaff(CAN.manageVisits);
-    const room = await roomFor(token);
+    const room = await roomFor(user, token);
     const db = await getDb();
     const before = await db.query.maintenanceVisits.findFirst({ where: eq(schema.maintenanceVisits.id, visitId) });
     if (!room || !before || before.roomId !== room.id || before.status !== "scheduled") return { error: "That visit isn't open for this room any more. Reload the page." };
@@ -90,7 +93,7 @@ export async function startItemsCheck(token: string, kind: DoorCheck): Promise<A
   return mutate(async () => {
     const user = await requireStaff(CAN.viewInventory);
     if (!DOOR_CHECKS.includes(kind)) return { error: "Pick which check." };
-    const room = await roomFor(token);
+    const room = await roomFor(user, token);
     if (!room) return { error: GONE };
     await recordCheckIn(user, room, "inventory");
     return { redirectTo: `/inventory/rooms/${room.id}?kind=${kind}#check` };
@@ -101,7 +104,7 @@ export async function startItemsCheck(token: string, kind: DoorCheck): Promise<A
 export async function startCleaning(token: string): Promise<ActionState> {
   return mutate(async () => {
     const user = await requireStaff(CAN.cleanRooms);
-    const room = await roomFor(token);
+    const room = await roomFor(user, token);
     if (!room) return { error: GONE };
     const db = await getDb();
     const open = await db.query.cleanings.findFirst({
@@ -124,7 +127,7 @@ export async function startCleaning(token: string): Promise<ActionState> {
 export async function startChecklist(token: string, checklistId: string): Promise<ActionState> {
   return mutate(async () => {
     const user = await requireStaff(CAN.runChecklists);
-    const room = await roomFor(token);
+    const room = await roomFor(user, token);
     if (!room) return { error: GONE };
     const { row } = await recordCheckIn(user, room, "checklist");
     const run = await beginRun(user, room.id, checklistId, row.id);

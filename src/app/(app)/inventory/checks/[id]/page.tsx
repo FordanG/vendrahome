@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { roomInReach } from "@/lib/hotel";
 import { CHECK_KIND_LABELS, CONDITION_LABELS, CONDITION_TONES, checkDifferences } from "@/lib/inventory";
 import { centavosToInput, formatDate, formatMoment, formatPeso } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
@@ -17,7 +18,7 @@ export default async function CheckPage({ params }: PageProps<"/inventory/checks
   if (!UUID.test(id)) notFound();
   const db = await getDb();
   const check = await db.query.inventoryChecks.findFirst({ where: eq(schema.inventoryChecks.id, id) });
-  if (!check) notFound();
+  if (!check || !(await roomInReach(user, check.roomId))) notFound();
   const [room, by, stay, contract, { baseline, lines, differences }] = await Promise.all([
     db.query.rooms.findFirst({ where: eq(schema.rooms.id, check.roomId) }),
     check.checkedBy ? db.query.staff.findFirst({ where: eq(schema.staff.id, check.checkedBy), columns: { name: true } }) : null,

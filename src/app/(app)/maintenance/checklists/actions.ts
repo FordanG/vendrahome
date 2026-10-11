@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, isNull, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { roomInReach } from "@/lib/hotel";
 import { audit } from "@/lib/audit";
 import { beginRun } from "@/lib/checklists";
 import { str } from "@/lib/format";
@@ -22,7 +23,7 @@ function refresh() {
 export async function startRunHere(roomId: string, checklistId: string): Promise<ActionState> {
   return mutate(async () => {
     const user = await requireStaff(CAN.runChecklists);
-    const room = await (await getDb()).query.rooms.findFirst({ where: eq(schema.rooms.id, roomId) });
+    const room = await roomInReach(user, roomId);
     if (!room) return { error: "Room not found." };
     const run = await beginRun(user, roomId, checklistId, null);
     if (!run) return { error: "That checklist isn't in use." };
@@ -39,7 +40,7 @@ export async function saveRun(id: string, _: ActionState, fd: FormData): Promise
     const user = await requireStaff(CAN.runChecklists);
     const db = await getDb();
     const run = await db.query.checklistRuns.findFirst({ where: eq(schema.checklistRuns.id, id) });
-    if (!run) return { error: "Checklist not found." };
+    if (!run || !(await roomInReach(user, run.roomId))) return { error: "Checklist not found." };
     if (run.finishedAt) return { error: "This checklist is already finished." };
     const finish = fd.get("finish") === "1";
     const results: ChecklistResult[] = run.results.map((item, i) => {
@@ -81,6 +82,8 @@ export async function cancelRun(id: string): Promise<ActionState> {
   return mutate(async () => {
     const user = await requireStaff(CAN.runChecklists);
     const db = await getDb();
+    const target = await db.query.checklistRuns.findFirst({ where: eq(schema.checklistRuns.id, id) });
+    if (!target || !(await roomInReach(user, target.roomId))) return { error: "Only an unfinished checklist can be cancelled." };
     const [gone] = await db.delete(schema.checklistRuns).where(and(eq(schema.checklistRuns.id, id), isNull(schema.checklistRuns.finishedAt))).returning();
     if (!gone) return { error: "Only an unfinished checklist can be cancelled." };
     await audit(user.id, "cancel", "checklist_run", id, { roomId: gone.roomId });

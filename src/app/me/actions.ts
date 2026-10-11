@@ -44,7 +44,8 @@ export async function createRequest(_: ActionState, fd: FormData): Promise<Actio
     // A problem in a shared space, reported from its door code.
     const areaId = str(fd.get("areaId"));
     const area = areaId ? await db.query.areas.findFirst({ where: and(eq(schema.areas.id, areaId), eq(schema.areas.active, true)) }) : null;
-    if (areaId && !area) return { error: "That place can't take reports any more. Please tell the front desk." };
+    // Only shared spaces at the tenant's own hotel.
+    if (areaId && (!area || area.propertyId !== stay.room.propertyId)) return { error: "That place can't take reports any more. Please tell the front desk." };
     if (area && kind !== "issue") return { error: "Only problems can be reported for a shared space." };
     const photo = await savePhoto("request", fd.get("photo"), user.id);
     if (photo && "error" in photo) return { error: photo.error };

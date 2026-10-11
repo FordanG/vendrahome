@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { and, asc, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { addDaysISO, formatDate, formatMoment, todayISO } from "@/lib/format";
 import { cleaningsDue, everyLabel, lastCleanedLabel, type CleaningDue } from "@/lib/housekeeping";
 import { ActionForm } from "@/components/action-form";
@@ -26,28 +27,28 @@ function DuePlate({ r, today }: { r: CleaningDue; today: string }) {
 }
 
 export default async function HousekeepingPage() {
-  const user = await requireStaff(CAN.cleanRooms);
+  const { user, hotel } = await requireHotel(CAN.cleanRooms);
   const today = todayISO();
   const db = await getDb();
   const [due, inProgress, recent, steps, rooms, roomTypes] = await Promise.all([
-    cleaningsDue(today),
+    cleaningsDue(today, hotel.id),
     db
       .select({ c: schema.cleanings, number: schema.rooms.number, name: schema.staff.name })
       .from(schema.cleanings)
       .innerJoin(schema.rooms, eq(schema.cleanings.roomId, schema.rooms.id))
       .leftJoin(schema.staff, eq(schema.cleanings.staffId, schema.staff.id))
-      .where(isNull(schema.cleanings.finishedAt))
+      .where(and(isNull(schema.cleanings.finishedAt), eq(schema.rooms.propertyId, hotel.id)))
       .orderBy(asc(schema.cleanings.startedAt)),
     db
       .select({ c: schema.cleanings, number: schema.rooms.number, name: schema.staff.name })
       .from(schema.cleanings)
       .innerJoin(schema.rooms, eq(schema.cleanings.roomId, schema.rooms.id))
       .leftJoin(schema.staff, eq(schema.cleanings.staffId, schema.staff.id))
-      .where(and(isNotNull(schema.cleanings.finishedAt), gte(schema.cleanings.finishedAt, new Date(addDaysISO(today, -8) + "T16:00:00Z"))))
+      .where(and(eq(schema.rooms.propertyId, hotel.id), isNotNull(schema.cleanings.finishedAt), gte(schema.cleanings.finishedAt, new Date(addDaysISO(today, -8) + "T16:00:00Z"))))
       .orderBy(desc(schema.cleanings.finishedAt))
       .limit(100),
     db.select().from(schema.cleaningSteps).orderBy(asc(schema.cleaningSteps.position), asc(schema.cleaningSteps.label)),
-    db.select({ id: schema.rooms.id, number: schema.rooms.number, floor: schema.rooms.floor, roomTypeId: schema.rooms.roomTypeId, cleanEveryDays: schema.rooms.cleanEveryDays }).from(schema.rooms).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
+    db.select({ id: schema.rooms.id, number: schema.rooms.number, floor: schema.rooms.floor, roomTypeId: schema.rooms.roomTypeId, cleanEveryDays: schema.rooms.cleanEveryDays }).from(schema.rooms).where(eq(schema.rooms.propertyId, hotel.id)).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
     db.select().from(schema.roomTypes).orderBy(asc(schema.roomTypes.name)),
   ]);
   const busy = new Set(inProgress.map((x) => x.c.roomId));

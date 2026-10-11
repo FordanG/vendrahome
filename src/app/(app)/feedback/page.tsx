@@ -1,7 +1,8 @@
 import { and, desc, eq, isNull, lte } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { inHotelRooms, requireHotel } from "@/lib/hotel";
 import { formatMoment } from "@/lib/format";
 import { FLAG_AT, feedbackSummary, TOPIC_LABELS } from "@/lib/feedback";
 import { ActionForm } from "@/components/action-form";
@@ -17,7 +18,7 @@ const Stars = ({ n }: { n: number }) => (
 );
 
 export default async function FeedbackPage() {
-  await requireStaff(CAN.viewFeedback);
+  const { hotel } = await requireHotel(CAN.viewFeedback);
   const db = await getDb();
   const query = () =>
     db
@@ -27,9 +28,9 @@ export default async function FeedbackPage() {
       .leftJoin(schema.rooms, eq(schema.feedback.roomId, schema.rooms.id))
       .leftJoin(followedBy, eq(schema.feedback.followedUpBy, followedBy.id));
   const [flagged, recent, summary] = await Promise.all([
-    query().where(and(lte(schema.feedback.stars, FLAG_AT), isNull(schema.feedback.followUp))).orderBy(desc(schema.feedback.createdAt)),
-    query().orderBy(desc(schema.feedback.createdAt)).limit(60),
-    feedbackSummary(30),
+    query().where(and(inHotelRooms(schema.feedback.roomId, hotel.id), lte(schema.feedback.stars, FLAG_AT), isNull(schema.feedback.followUp))).orderBy(desc(schema.feedback.createdAt)),
+    query().where(inHotelRooms(schema.feedback.roomId, hotel.id)).orderBy(desc(schema.feedback.createdAt)).limit(60),
+    feedbackSummary(30, hotel.id),
   ]);
 
   return (

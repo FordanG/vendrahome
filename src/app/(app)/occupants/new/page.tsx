@@ -1,6 +1,7 @@
 import { asc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { getRoomOptions } from "@/lib/assignments";
 import { ActionForm } from "@/components/action-form";
 import { Card, PageHeader, SectionTitle } from "@/components/ui";
@@ -8,12 +9,12 @@ import { createOccupant } from "../actions";
 import { OccupantFields, StayFields } from "../occupant-fields";
 
 export default async function NewOccupantPage({ searchParams }: PageProps<"/occupants/new">) {
-  await requireStaff(CAN.manageOccupants);
+  const { hotel } = await requireHotel(CAN.manageOccupants);
   const { room, client } = await searchParams;
   const db = await getDb();
   const [clients, rooms] = await Promise.all([
     db.select({ id: schema.clients.id, name: schema.clients.name }).from(schema.clients).orderBy(asc(schema.clients.name)),
-    getRoomOptions(),
+    getRoomOptions(hotel.id),
   ]);
 
   return (

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { asc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { getRoomBoard } from "@/lib/rooms";
 import { STATUS_LABELS, STATUS_TONES } from "@/lib/room-status";
 import { bedsTaken, todayISO } from "@/lib/format";
@@ -12,11 +13,11 @@ import { createRoom, saveRoomType, setPeopleAllowedMany } from "./actions";
 import { RoomFields } from "./room-fields";
 
 export default async function RoomsPage() {
-  const user = await requireStaff();
+  const { user, hotel } = await requireHotel();
   const canManage = CAN.manageRooms.includes(user.role);
   const db = await getDb();
   const [rooms, roomTypes] = await Promise.all([
-    getRoomBoard(todayISO()),
+    getRoomBoard(todayISO(), hotel.id),
     db.select().from(schema.roomTypes).orderBy(asc(schema.roomTypes.name)),
   ]);
   const floors = [...new Set(rooms.map((r) => r.floor))];

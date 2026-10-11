@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { reachRooms } from "@/lib/hotel";
 import { audit } from "@/lib/audit";
 import { str } from "@/lib/format";
 import { mutate } from "@/lib/mutations";
@@ -20,7 +21,7 @@ export async function followUp(id: string, _: ActionState, fd: FormData): Promis
     const [row] = await db
       .update(schema.feedback)
       .set({ followUp: note, followedUpBy: user.id, followedUpAt: new Date() })
-      .where(and(eq(schema.feedback.id, id), isNull(schema.feedback.followUp)))
+      .where(and(eq(schema.feedback.id, id), isNull(schema.feedback.followUp), reachRooms(user, schema.feedback.roomId)))
       .returning();
     if (!row) return { error: "Someone already followed up on this." };
     await audit(user.id, "follow_up", "feedback", id, { note });

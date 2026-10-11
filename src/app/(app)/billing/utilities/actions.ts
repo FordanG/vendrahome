@@ -3,6 +3,7 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { contractInReach } from "@/lib/hotel";
 import { audit } from "@/lib/audit";
 import { mutate } from "@/lib/mutations";
 import { formatDate, isISODate, parsePeso, str, todayISO } from "@/lib/format";
@@ -52,7 +53,7 @@ export async function addUtilityBill(_: ActionState, fd: FormData): Promise<Acti
     const user = await requireStaff(CAN.manageBilling);
     const db = await getDb();
     const type = await db.query.utilityTypes.findFirst({ where: eq(schema.utilityTypes.id, String(fd.get("utilityTypeId"))) });
-    const contract = await db.query.contracts.findFirst({ where: eq(schema.contracts.id, String(fd.get("contractId"))) });
+    const contract = await contractInReach(user, String(fd.get("contractId")));
     if (!type || !type.active) return { error: "Pick the utility." };
     if (!contract || contract.status === "draft") return { error: "Pick an active or ended contract." };
     const periodStart = str(fd.get("periodStart"));

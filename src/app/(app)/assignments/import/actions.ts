@@ -5,7 +5,8 @@ import { mutate } from "@/lib/mutations";
 import { revalidatePath } from "next/cache";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { audit } from "@/lib/audit";
 import { checkRoomAvailable } from "@/lib/assignments";
 import { normalizeDate, parseCsv } from "@/lib/csv";
@@ -14,7 +15,7 @@ import type { ActionState } from "@/lib/action-state";
 
 export async function importOccupants(_: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async () => {
-    const user = await requireStaff(CAN.manageOccupants);
+    const { user, hotel } = await requireHotel(CAN.manageOccupants);
     const clientId = String(fd.get("clientId") ?? "") || null;
     const file = fd.get("file");
     let text = String(fd.get("pasted") ?? "");
@@ -35,7 +36,8 @@ export async function importOccupants(_: ActionState, fd: FormData): Promise<Act
     if (!clientId || !await db.query.clients.findFirst({ where: eq(schema.clients.id, clientId) }))
       return { error: "Pick an existing company for this import." };
     const [rooms, existing] = await Promise.all([
-      db.select().from(schema.rooms),
+      // Room numbers are read as rooms of the hotel being looked at.
+      db.select().from(schema.rooms).where(eq(schema.rooms.propertyId, hotel.id)),
       db.select({ employeeId: schema.occupants.employeeId }).from(schema.occupants)
         .where(and(isNotNull(schema.occupants.employeeId), eq(schema.occupants.clientId, clientId))),
     ]);
@@ -63,12 +65,12 @@ export async function importOccupants(_: ActionState, fd: FormData): Promise<Act
 
       const roomNumber = cell("room");
       if (!roomNumber) {
-        const [o] = await db.insert(schema.occupants).values({ ...details.value, clientId }).returning();
+        const [o] = await db.insert(schema.occupants).values({ ...details.value, clientId, propertyId: hotel.id }).returning();
         inserted.push(o.id);
         return;
       }
       const room = roomByNumber.get(roomNumber.toLowerCase());
-      if (!room) return void errors.push(`Row ${line}: room "${roomNumber}" doesn't exist.`);
+      if (!room) return void errors.push(`Row ${line}: room "${roomNumber}" doesn't exist at ${hotel.name}.`);
       if (room.condition === "not_available") return void errors.push(`Row ${line}: room ${room.number} is out of service.`);
       const checkIn = normalizeDate(cell("check_in"));
       if (!checkIn) return void errors.push(`Row ${line}: check_in date is missing or not a date.`);
@@ -79,7 +81,7 @@ export async function importOccupants(_: ActionState, fd: FormData): Promise<Act
       const slot = cell("bed") || cell("slot") || null;
       const check = await checkRoomAvailable({ roomId: room.id, slot, checkIn, expectedCheckOut, clientId });
       if ("error" in check) return void errors.push(`Row ${line}: ${check.error}`);
-      const [o] = await db.insert(schema.occupants).values({ ...details.value, clientId }).returning();
+      const [o] = await db.insert(schema.occupants).values({ ...details.value, clientId, propertyId: hotel.id }).returning();
       await db.insert(schema.roomAssignments).values({
         roomId: room.id, slot, checkIn, expectedCheckOut, occupantId: o.id,
         keysIssued: cell("keys_issued") || null, contractId: check.contractId, assignedBy: user.id,

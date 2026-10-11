@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, getCurrentStaff, homeFor } from "@/lib/auth";
+import { canUseHotel } from "@/lib/hotel";
 import { addDaysISO, formatDate, formatMoment, formatTimeRange, todayISO } from "@/lib/format";
 import { REQUEST_STATUS_TONES, requestStatusLabel } from "@/lib/portal";
 import { visitPermission } from "@/lib/service-work";
@@ -51,6 +52,8 @@ export default async function ScanPage({ params }: PageProps<"/r/[token]">) {
 
   if (user.role === "tenant") redirect(area ? `/me/requests?area=${area.id}` : "/me/requests");
   if (!CAN.checkInAtRooms.includes(user.role)) redirect(homeFor(user));
+  // Staff from another hotel get nothing here: the code isn't theirs to use.
+  if (!canUseHotel(user, room?.propertyId ?? area?.propertyId)) notFound();
 
   return (
     <div className="flex min-h-full flex-1 flex-col">

@@ -19,6 +19,7 @@ export default async function CompanyBillingPage() {
     .where(and(eq(schema.contracts.clientId, client.id), inArray(schema.contracts.status, ["active", "ended", "terminated"])))
     .orderBy(desc(schema.contracts.startDate));
   const accounts = await Promise.all(contracts.map(async (contract) => ({ contract, account: await companyAccount(contract.id, today) })));
+  const hotels = await db.select({ id: schema.properties.id, name: schema.properties.name }).from(schema.properties);
 
   return (
     <>
@@ -30,6 +31,7 @@ export default async function CompanyBillingPage() {
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="plate text-xl font-bold">{contract.reference}</h2>
               <Badge tone={CONTRACT_STATUS_TONES[contract.status]}>{CONTRACT_STATUS_LABELS[contract.status]}</Badge>
+              <span className="w-full text-sm text-muted">{hotels.find((h) => h.id === contract.propertyId)?.name}</span>
             </div>
             <Card>
               <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">

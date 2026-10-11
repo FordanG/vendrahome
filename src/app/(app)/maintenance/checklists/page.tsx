@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { and, asc, desc, gte, isNotNull, isNull, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { addDaysISO, formatMoment, todayISO } from "@/lib/format";
 import { checklistsDue } from "@/lib/checklists";
 import { everyLabel } from "@/lib/housekeeping";
@@ -27,7 +28,7 @@ function TemplateFields({ c }: { c?: MaintenanceChecklist }) {
 }
 
 export default async function ChecklistsPage({ searchParams }: PageProps<"/maintenance/checklists">) {
-  const user = await requireStaff(CAN.runChecklists);
+  const { user, hotel } = await requireHotel(CAN.runChecklists);
   const canEdit = CAN.manageMaintenanceChecklists.includes(user.role);
   const { done } = await searchParams;
   const today = todayISO();
@@ -40,10 +41,10 @@ export default async function ChecklistsPage({ searchParams }: PageProps<"/maint
       .innerJoin(schema.maintenanceChecklists, eq(schema.checklistRuns.checklistId, schema.maintenanceChecklists.id))
       .leftJoin(schema.staff, eq(schema.checklistRuns.staffId, schema.staff.id));
   const [due, open, recent, all] = await Promise.all([
-    checklistsDue(today),
-    runQuery().where(isNull(schema.checklistRuns.finishedAt)).orderBy(asc(schema.checklistRuns.startedAt)),
+    checklistsDue(today, { hotelId: hotel.id }),
+    runQuery().where(and(eq(schema.rooms.propertyId, hotel.id), isNull(schema.checklistRuns.finishedAt))).orderBy(asc(schema.checklistRuns.startedAt)),
     runQuery()
-      .where(and(isNotNull(schema.checklistRuns.finishedAt), gte(schema.checklistRuns.finishedAt, new Date(addDaysISO(today, -15) + "T16:00:00Z"))))
+      .where(and(eq(schema.rooms.propertyId, hotel.id), isNotNull(schema.checklistRuns.finishedAt), gte(schema.checklistRuns.finishedAt, new Date(addDaysISO(today, -15) + "T16:00:00Z"))))
       .orderBy(desc(schema.checklistRuns.finishedAt))
       .limit(60),
     canEdit ? db.select().from(schema.maintenanceChecklists).orderBy(asc(schema.maintenanceChecklists.name)) : Promise.resolve([]),

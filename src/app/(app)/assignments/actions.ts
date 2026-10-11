@@ -9,6 +9,7 @@ import { CAN, requireStaff } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { isISODate, str, todayISO } from "@/lib/format";
 import { checkRoomAvailable, openAssignmentFor } from "@/lib/assignments";
+import { roomInReach } from "@/lib/hotel";
 import type { ActionState } from "@/lib/action-state";
 
 function refresh() {
@@ -26,7 +27,7 @@ export async function confirmStayRequest(id: string, _: ActionState, fd: FormDat
   return mutate(async () => {
     const user = await requireStaff(CAN.manageOccupants);
     const ask = await pendingAsk(id);
-    if (!ask) return { error: "This ask was already handled or cancelled." };
+    if (!ask || !(await roomInReach(user, ask.roomId))) return { error: "This ask was already handled or cancelled." };
     const db = await getDb();
     const occupant = await db.query.occupants.findFirst({ where: eq(schema.occupants.id, ask.occupantId) });
     if (!occupant || occupant.clientId !== ask.clientId) return { error: "This person no longer belongs to that company." };
@@ -55,7 +56,7 @@ export async function confirmStayRequest(id: string, _: ActionState, fd: FormDat
           notes: ask.note ? `Asked by the company: ${ask.note}` : "Asked by the company",
         })
         .returning();
-      await db.update(schema.occupants).set({ status: "active" }).where(eq(schema.occupants.id, occupant.id));
+      await db.update(schema.occupants).set({ status: "active", propertyId: check.propertyId }).where(eq(schema.occupants.id, occupant.id));
       await db.update(schema.stayRequests).set({ ...done, assignmentId: stay.id }).where(eq(schema.stayRequests.id, ask.id));
       await audit(user.id, "assign", "room_assignment", stay.id, { occupantId: occupant.id, room: check.roomNumber, stayRequestId: ask.id });
       refresh();
@@ -87,6 +88,8 @@ export async function declineStayRequest(id: string, _: ActionState, fd: FormDat
     const user = await requireStaff(CAN.manageOccupants);
     const response = str(fd.get("response"));
     if (!response) return { error: "Say why, so the company knows what to do next." };
+    const ask = await pendingAsk(id);
+    if (!ask || !(await roomInReach(user, ask.roomId))) return { error: "This ask was already handled or cancelled." };
     const db = await getDb();
     const updated = await db
       .update(schema.stayRequests)

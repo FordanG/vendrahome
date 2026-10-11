@@ -1,24 +1,25 @@
 import Link from "next/link";
-import { asc, desc, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { CHECK_KIND_LABELS, CONDITION_LABELS, CONDITION_TONES, inventoryAttention } from "@/lib/inventory";
 import { formatDate, todayISO } from "@/lib/format";
 import { FloorJump, Row, RowLine, RowList, RoomPlate } from "@/components/list";
 import { Badge, Card, LinkButton, PageHeader, SectionTitle } from "@/components/ui";
 
 export default async function InventoryPage() {
-  const user = await requireStaff(CAN.viewInventory);
+  const { user, hotel } = await requireHotel(CAN.viewInventory);
   const today = todayISO();
   const db = await getDb();
   const [{ live, problems, service, noStartCheck }, rooms, lastChecks, storeroom] = await Promise.all([
-    inventoryAttention(today),
-    db.select().from(schema.rooms).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
+    inventoryAttention(today, hotel.id),
+    db.select().from(schema.rooms).where(eq(schema.rooms.propertyId, hotel.id)).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
     db
       .select({ roomId: schema.inventoryChecks.roomId, kind: schema.inventoryChecks.kind, checkedOn: schema.inventoryChecks.checkedOn })
       .from(schema.inventoryChecks)
       .orderBy(desc(schema.inventoryChecks.checkedOn), desc(schema.inventoryChecks.createdAt)),
-    db.select({ n: sql<number>`count(*)::int` }).from(schema.roomItems).where(sql`${schema.roomItems.roomId} IS NULL AND ${schema.roomItems.retiredOn} IS NULL`),
+    db.select({ n: sql<number>`count(*)::int` }).from(schema.roomItems).where(sql`${schema.roomItems.roomId} IS NULL AND ${schema.roomItems.retiredOn} IS NULL AND ${schema.roomItems.propertyId} = ${hotel.id}`),
   ]);
   const itemsByRoom = new Map<string, { total: number; problems: number }>();
   for (const { item } of live) {

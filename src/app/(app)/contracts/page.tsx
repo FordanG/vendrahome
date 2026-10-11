@@ -1,19 +1,21 @@
 import Link from "next/link";
 import { count, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { daysBetween, formatDate, todayISO } from "@/lib/format";
 import { Badge, Empty, LinkButton, PageHeader, Table, Td, Th } from "@/components/ui";
 import { CONTRACT_STATUS_LABELS, CONTRACT_STATUS_TONES } from "./status";
 
 export default async function ContractsPage() {
-  const user = await requireStaff(CAN.viewClients);
+  const { user, hotel } = await requireHotel(CAN.viewClients);
   const db = await getDb();
   const [contracts, roomCounts] = await Promise.all([
     db
       .select({ c: schema.contracts, clientName: schema.clients.name })
       .from(schema.contracts)
       .innerJoin(schema.clients, eq(schema.contracts.clientId, schema.clients.id))
+      .where(eq(schema.contracts.propertyId, hotel.id))
       .orderBy(desc(schema.contracts.startDate)),
     db
       .select({ contractId: schema.contractRooms.contractId, n: count() })
@@ -27,7 +29,7 @@ export default async function ContractsPage() {
     <>
       <PageHeader
         title="Contracts"
-        subtitle="Leases with companies: which rooms, for how long, and the rent."
+        subtitle={`Leases with companies at ${hotel.name}: which rooms, for how long, and the rent.`}
         actions={CAN.manageContracts.includes(user.role) && <LinkButton href="/contracts/new">New contract</LinkButton>}
       />
       {contracts.length === 0 ? (

@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { formatRate, formatReading, liveUtilityBills, rateToInput } from "@/lib/billing";
 import { addDaysISO, addMonthsISO, formatDate, formatPeso, todayISO } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
@@ -12,7 +13,7 @@ import { BillingTabs, ReverseButton } from "../parts";
 import { addUtilityBill, saveUtilityType } from "./actions";
 
 export default async function UtilitiesPage({ searchParams }: PageProps<"/billing/utilities">) {
-  await requireStaff(CAN.manageBilling);
+  const { hotel } = await requireHotel(CAN.manageBilling);
   const db = await getDb();
   const today = todayISO();
   const sp = await searchParams;
@@ -20,7 +21,7 @@ export default async function UtilitiesPage({ searchParams }: PageProps<"/billin
     .select({ id: schema.contracts.id, reference: schema.contracts.reference, client: schema.clients.name, status: schema.contracts.status })
     .from(schema.contracts)
     .innerJoin(schema.clients, eq(schema.contracts.clientId, schema.clients.id))
-    .where(inArray(schema.contracts.status, ["active", "ended", "terminated"]))
+    .where(and(eq(schema.contracts.propertyId, hotel.id), inArray(schema.contracts.status, ["active", "ended", "terminated"])))
     .orderBy(asc(schema.contracts.startDate));
   const contract = contracts.find((c) => c.id === sp.contract) ?? contracts.find((c) => c.status === "active") ?? contracts[0];
   const types = await db.select().from(schema.utilityTypes).orderBy(asc(schema.utilityTypes.position), asc(schema.utilityTypes.name));

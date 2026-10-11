@@ -1,6 +1,7 @@
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel, roomInReach } from "@/lib/hotel";
 import { ActionForm } from "@/components/action-form";
 import { Card, FormGrid, Input, SectionTitle } from "@/components/ui";
 import { addArea, updateArea } from "./actions";
@@ -11,17 +12,20 @@ import { AutoSubmitSelect } from "@/components/auto-submit";
 
 /** Door codes ready to print and stick on each door: one room, a floor, or every room. */
 export default async function DoorCodesPage({ searchParams }: PageProps<"/rooms/door-codes">) {
-  const user = await requireStaff(CAN.printDoorCodes);
+  const { user, hotel: viewed } = await requireHotel(CAN.printDoorCodes);
   const canManageAreas = CAN.manageAreas.includes(user.role);
   const { room: roomId, floor } = await searchParams;
   const db = await getDb();
-  const all = await db.select().from(schema.rooms).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number));
+  // One room's code opens in that room's own hotel, even when the owner is looking at another.
+  const picked = typeof roomId === "string" ? await roomInReach(user, roomId) : null;
+  const hotelId = picked?.propertyId ?? viewed.id;
+  const all = await db.select().from(schema.rooms).where(eq(schema.rooms.propertyId, hotelId)).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number));
   const floors = [...new Set(all.map((r) => r.floor))];
   const rooms =
     typeof roomId === "string" ? all.filter((r) => r.id === roomId)
     : typeof floor === "string" && floor && floor !== "areas" ? all.filter((r) => String(r.floor) === floor)
     : all;
-  const allAreas = await db.select().from(schema.areas).orderBy(asc(schema.areas.name));
+  const allAreas = await db.select().from(schema.areas).where(eq(schema.areas.propertyId, hotelId)).orderBy(asc(schema.areas.name));
   const showAreas = floor === "areas";
   const areaUrls = new Map(await Promise.all(allAreas.map(async (a) => [a.id, await roomScanUrl(a.qrToken)] as const)));
   const shown = showAreas

@@ -3,13 +3,15 @@ import { redirect } from "next/navigation";
 import { and, count, eq } from "drizzle-orm";
 import { requestScope } from "@/lib/service-work";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff, ROLE_LABELS, signOut } from "@/lib/auth";
+import { CAN, ROLE_LABELS, signOut } from "@/lib/auth";
+import { inHotelRooms, isOwner, requireHotel } from "@/lib/hotel";
+import { HotelSwitcher } from "./hotel-switcher";
 import type { StaffRole } from "@/db/schema";
 import type { IconName } from "@/components/icons";
 import { Brand } from "@/components/brand";
 import { BottomNav, SidebarNav, type NavGroup, type NavLink } from "./nav-links";
 
-type NavItem = { href: string; label: string; roles?: StaffRole[]; icon?: IconName };
+type NavItem = { href: string; label: string; roles?: StaffRole[]; icon?: IconName; ownerOnly?: boolean };
 
 const NAV: { label: string; items: NavItem[] }[] = [
   {
@@ -48,8 +50,9 @@ const NAV: { label: string; items: NavItem[] }[] = [
       { href: "/inventory", label: "Room inventory" },
       { href: "/schedules", label: "Kitchen & laundry" },
       { href: "/house-rules", label: "House rules" },
+      { href: "/hotels", label: "Hotels", roles: ["admin"], ownerOnly: true },
       { href: "/staff", label: "Staff", roles: ["admin"] },
-      { href: "/audit", label: "Audit history", roles: ["admin"] },
+      { href: "/audit", label: "Audit history", roles: ["admin"], ownerOnly: true },
     ],
   },
 ];
@@ -65,19 +68,19 @@ async function logout() {
 }
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
-  const user = await requireStaff();
+  const { user, hotel, hotels } = await requireHotel();
   const db = await getDb();
   const [[{ waiting }], [{ asks }]] = await Promise.all([
-    db.select({ waiting: count() }).from(schema.tenantRequests).where(and(eq(schema.tenantRequests.status, "pending"), requestScope(user))),
+    db.select({ waiting: count() }).from(schema.tenantRequests).where(and(eq(schema.tenantRequests.status, "pending"), requestScope(user, hotel.id))),
     CAN.manageOccupants.includes(user.role)
-      ? db.select({ asks: count() }).from(schema.stayRequests).where(eq(schema.stayRequests.status, "pending"))
+      ? db.select({ asks: count() }).from(schema.stayRequests).where(and(eq(schema.stayRequests.status, "pending"), inHotelRooms(schema.stayRequests.roomId, hotel.id)))
       : Promise.resolve([{ asks: 0 }]),
   ]);
 
   const groups: NavGroup[] = NAV.map((g) => ({
     label: g.label,
     items: g.items
-      .filter((n) => !n.roles || n.roles.includes(user.role))
+      .filter((n) => (!n.roles || n.roles.includes(user.role)) && (!n.ownerOnly || isOwner(user)))
       .map(({ href, label, icon }) => ({ href, label, icon, count: href === "/requests" ? waiting : href === "/assignments" ? asks : undefined })),
   })).filter((g) => g.items.length > 0);
 
@@ -96,7 +99,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <header className="no-print sticky top-0 z-30 border-b border-white/10 bg-sidebar pt-[env(safe-area-inset-top)] text-sidebar-foreground md:hidden">
         <div className="flex h-12 items-center justify-between gap-3 px-4">
           <Brand className="text-lg" />
-          <p className="min-w-0 truncate text-xs text-sidebar-muted">{user.name}</p>
+          <p className="min-w-0 truncate text-xs text-sidebar-muted">{hotels.length > 1 ? hotel.name : user.name}</p>
         </div>
       </header>
       <BottomNav
@@ -105,6 +108,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         moreFooter={
           <>
             <p className="px-3 pb-2 text-xs text-muted">{userLine}</p>
+            {hotels.length > 1 && <HotelSwitcher hotels={hotels} current={hotel.id} className="mb-2 px-3" />}
             <Link href="/account" className="flex min-h-12 items-center rounded-lg px-3 text-base hover:bg-background">
               My account
             </Link>
@@ -121,6 +125,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <div className="px-6 pb-6 pt-6">
           <Brand className="text-xl" />
           <p className="mt-2 text-xs text-sidebar-muted">{userLine}</p>
+          {hotels.length > 1 ? (
+            <HotelSwitcher hotels={hotels} current={hotel.id} className="mt-3" dark />
+          ) : (
+            <p className="mt-1 text-xs text-sidebar-muted">{hotel.name}</p>
+          )}
           <div className="mt-3 flex gap-3 text-xs">
             <Link href="/account" className="text-sidebar-muted underline-offset-2 hover:text-sidebar-foreground hover:underline">
               My account

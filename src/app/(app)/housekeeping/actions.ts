@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { requireHotel, roomInReach } from "@/lib/hotel";
 import { audit } from "@/lib/audit";
 import { str } from "@/lib/format";
 import { mutate } from "@/lib/mutations";
@@ -25,7 +26,7 @@ export async function startCleaningHere(roomId: string): Promise<ActionState> {
   return mutate(async () => {
     const user = await requireStaff(CAN.cleanRooms);
     const db = await getDb();
-    const room = await db.query.rooms.findFirst({ where: eq(schema.rooms.id, roomId) });
+    const room = await roomInReach(user, roomId);
     if (!room) return { error: "Room not found." };
     const open = await db.query.cleanings.findFirst({ where: and(eq(schema.cleanings.roomId, roomId), isNull(schema.cleanings.finishedAt)) });
     if (open) return { redirectTo: `/housekeeping/cleanings/${open.id}` };
@@ -46,7 +47,7 @@ export async function saveCleaning(id: string, _: ActionState, fd: FormData): Pr
     const user = await requireStaff(CAN.cleanRooms);
     const db = await getDb();
     const cleaning = await db.query.cleanings.findFirst({ where: eq(schema.cleanings.id, id) });
-    if (!cleaning) return { error: "Cleaning not found." };
+    if (!cleaning || !(await roomInReach(user, cleaning.roomId))) return { error: "Cleaning not found." };
     if (cleaning.finishedAt) return { error: "This cleaning is already finished." };
     const finish = fd.get("finish") === "1";
     const steps = cleaning.steps.map((s, i) => ({ label: s.label, done: fd.get(`step_${i}`) === "on" }));
@@ -67,6 +68,8 @@ export async function cancelCleaning(id: string): Promise<ActionState> {
   return mutate(async () => {
     const user = await requireStaff(CAN.cleanRooms);
     const db = await getDb();
+    const target = await db.query.cleanings.findFirst({ where: eq(schema.cleanings.id, id) });
+    if (!target || !(await roomInReach(user, target.roomId))) return { error: "Only a cleaning that isn't finished can be cancelled." };
     const [gone] = await db.delete(schema.cleanings).where(and(eq(schema.cleanings.id, id), isNull(schema.cleanings.finishedAt))).returning();
     if (!gone) return { error: "Only a cleaning that isn't finished can be cancelled." };
     await audit(user.id, "cancel", "cleaning", id, { roomId: gone.roomId });
@@ -81,7 +84,7 @@ export async function cancelCleaning(id: string): Promise<ActionState> {
  */
 export async function setCleaningSchedule(_: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async () => {
-    const user = await requireStaff(CAN.manageCleaningSchedule);
+    const { user, hotel } = await requireHotel(CAN.manageCleaningSchedule);
     const raw = str(fd.get("every"));
     const every = raw == null ? null : Number(raw);
     if (every !== null && (!Number.isInteger(every) || every < 1 || every > 90)) return { error: "Days between cleanings must be a whole number from 1 to 90, or blank for no schedule." };
@@ -93,7 +96,10 @@ export async function setCleaningSchedule(_: ActionState, fd: FormData): Promise
     const db = await getDb();
     const rooms = await db.query.rooms.findMany({
       columns: { id: true },
-      where: floor ? eq(schema.rooms.floor, Number(floor[1])) : type ? eq(schema.rooms.roomTypeId, type[1]) : room ? eq(schema.rooms.id, room[1]) : undefined,
+      where: and(
+        eq(schema.rooms.propertyId, hotel.id),
+        floor ? eq(schema.rooms.floor, Number(floor[1])) : type ? eq(schema.rooms.roomTypeId, type[1]) : room ? eq(schema.rooms.id, room[1]) : undefined,
+      ),
     });
     if (rooms.length === 0) return { error: "No rooms match." };
     await db.update(schema.rooms).set({ cleanEveryDays: every }).where(inArray(schema.rooms.id, rooms.map((r) => r.id)));

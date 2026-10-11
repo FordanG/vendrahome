@@ -12,7 +12,7 @@ export default async function CompanyHome() {
   const today = todayISO();
   const db = await getDb();
   const scope = await companyRequestScope(client.id);
-  const [rooms, contracts, [{ waiting }], [{ open }], [{ asks }]] = await Promise.all([
+  const [rooms, contracts, [{ waiting }], [{ open }], [{ asks }], hotels] = await Promise.all([
     companyRooms(client.id, today),
     db
       .select()
@@ -25,11 +25,18 @@ export default async function CompanyHome() {
       .from(schema.tenantRequests)
       .where(and(eq(schema.tenantRequests.awaitingCompany, false), inArray(schema.tenantRequests.status, ["pending", "approved"]), scope)),
     db.select({ asks: count() }).from(schema.stayRequests).where(and(eq(schema.stayRequests.clientId, client.id), eq(schema.stayRequests.status, "pending"))),
+    db.select({ id: schema.properties.id, name: schema.properties.name }).from(schema.properties),
   ]);
+  const hotelOf = (id: string) => hotels.find((h) => h.id === id)?.name;
   const living = rooms.reduce((n, r) => n + r.now.length, 0);
   const beds = rooms.reduce((n, r) => n + r.room.capacity, 0);
   const free = rooms.reduce((n, r) => n + r.free, 0);
-  const floors = [...new Set(rooms.map((r) => r.room.floor))];
+  // Rooms are grouped by hotel, then floor; the hotel only shows when there's more than one.
+  const groups = [...new Set(rooms.map((r) => `${r.hotel}|${r.room.floor}`))].map((k) => {
+    const [hotel, floor] = k.split("|");
+    return { key: k, hotel, floor: Number(floor) };
+  });
+  const manyHotels = new Set(rooms.map((r) => r.hotel)).size > 1;
 
   return (
     <>
@@ -56,12 +63,14 @@ export default async function CompanyHome() {
           {rooms.length === 0 ? (
             <Empty>No rooms under an active contract today.</Empty>
           ) : (
-            floors.map((f) => (
-              <div key={f} className="mb-4">
-                <h3 className="mb-1.5 text-xs font-semibold text-muted">Floor {f}</h3>
+            groups.map((g) => (
+              <div key={g.key} className="mb-4">
+                <h3 className="mb-1.5 text-xs font-semibold text-muted">
+                  {manyHotels && `${g.hotel}, `}Floor {g.floor}
+                </h3>
                 <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface text-sm">
                   {rooms
-                    .filter((r) => r.room.floor === f)
+                    .filter((r) => r.hotel === g.hotel && r.room.floor === g.floor)
                     .map(({ room, now, coming, free }) => (
                       <li key={room.id} className="flex items-start gap-3 px-4 py-2.5">
                         <span className="plate w-14 shrink-0 text-base font-bold">{room.number}</span>
@@ -101,7 +110,7 @@ export default async function CompanyHome() {
                     <Badge tone={CONTRACT_STATUS_TONES[c.status]}>{CONTRACT_STATUS_LABELS[c.status]}</Badge>
                   </div>
                   <p className="mt-1 text-sm text-muted">
-                    {formatDate(c.startDate)} to {formatDate(c.endDate)}
+                    {hotelOf(c.propertyId)}, {formatDate(c.startDate)} to {formatDate(c.endDate)}
                   </p>
                 </Card>
               ))}

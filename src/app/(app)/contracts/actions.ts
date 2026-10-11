@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, gte, inArray, isNull, lte, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { contractInReach, requireHotel } from "@/lib/hotel";
 import { audit } from "@/lib/audit";
 import { isISODate, parsePeso, str, todayISO } from "@/lib/format";
 import { contractMonths, rentSchedule } from "@/lib/rent";
@@ -89,17 +90,18 @@ function clashMessage(clashes: { number: string; reference: string }[]) {
 
 export async function createContract(_: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async () => {
-    const user = await requireStaff(CAN.manageContracts);
+    const { user, hotel } = await requireHotel(CAN.manageContracts);
     const parsed = readTerms(fd);
     if ("error" in parsed) return parsed;
     const db = await getDb();
 
+    // A contract covers rooms in one hotel: the one being looked at.
     let roomIds: string[] = [];
     if (fd.get("rooms") === "all") {
-      roomIds = (await db.select({ id: schema.rooms.id }).from(schema.rooms)).map((r) => r.id);
+      roomIds = (await db.select({ id: schema.rooms.id }).from(schema.rooms).where(eq(schema.rooms.propertyId, hotel.id))).map((r) => r.id);
     }
 
-    const [contract] = await db.insert(schema.contracts).values(parsed.value).returning();
+    const [contract] = await db.insert(schema.contracts).values({ ...parsed.value, propertyId: hotel.id }).returning();
     if (roomIds.length > 0) {
       await db.insert(schema.contractRooms).values(roomIds.map((roomId) => ({ contractId: contract.id, roomId })));
     }
@@ -115,7 +117,7 @@ export async function updateContract(id: string, _: ActionState, fd: FormData): 
     const parsed = readTerms(fd);
     if ("error" in parsed) return parsed;
     const db = await getDb();
-    const current = await db.query.contracts.findFirst({ where: eq(schema.contracts.id, id) });
+    const current = await contractInReach(user, id);
     if (!current) return { error: "Contract not found." };
     if (current.status !== "draft") {
       const changed = Object.entries(parsed.value).some(([key, value]) =>
@@ -142,7 +144,7 @@ export async function setContractStatus(id: string, _: ActionState, fd: FormData
     const status = String(fd.get("status"));
     if (!["draft", "active", "ended", "terminated"].includes(status)) return { error: "Unknown status." };
     const db = await getDb();
-    const contract = await db.query.contracts.findFirst({ where: eq(schema.contracts.id, id) });
+    const contract = await contractInReach(user, id);
     if (!contract) return { error: "Contract not found." };
     if (status === contract.status) return { ok: "Status unchanged." };
     if (contract.status === "ended" || contract.status === "terminated" || status === "draft")
@@ -195,10 +197,13 @@ export async function addContractRooms(id: string, _: ActionState, fd: FormData)
     const rate = fd.get("monthlyRate") ? parsePeso(fd.get("monthlyRate")) : null;
     if (fd.get("monthlyRate") && rate === null) return { error: "Rate isn't a valid amount." };
     const db = await getDb();
-    const editable = await db.query.contracts.findFirst({ where: eq(schema.contracts.id, id) });
+    const editable = await contractInReach(user, id);
     if (!editable || editable.status !== "draft") return { error: "Rooms, rates and rent changes can only be edited on a draft. Activated terms are preserved." };
-    const contract = await db.query.contracts.findFirst({ where: eq(schema.contracts.id, id) });
+    const contract = await contractInReach(user, id);
     if (!contract) return { error: "Contract not found." };
+    const sameHotel = await db.select({ id: schema.rooms.id }).from(schema.rooms)
+      .where(and(inArray(schema.rooms.id, roomIds), eq(schema.rooms.propertyId, contract.propertyId)));
+    if (sameHotel.length !== new Set(roomIds).size) return { error: "A contract can only cover rooms in its own hotel." };
     if (contract.status === "active") {
       const clashes = await roomsInOtherContracts(roomIds, contract.startDate, contract.endDate, id);
       if (clashes.length) return { error: clashMessage(clashes) };
@@ -220,7 +225,7 @@ export async function updateContractRooms(id: string, _: ActionState, fd: FormDa
     const ids = fd.getAll("contractRoomIds").map(String);
     if (ids.length === 0) return { error: "Tick at least one room." };
     const db = await getDb();
-    const editable = await db.query.contracts.findFirst({ where: eq(schema.contracts.id, id) });
+    const editable = await contractInReach(user, id);
     if (!editable || editable.status !== "draft") return { error: "Rooms, rates and rent changes can only be edited on a draft. Activated terms are preserved." };
     if (fd.get("intent") === "remove") {
       await db
@@ -258,7 +263,7 @@ export async function addRentStep(id: string, _: ActionState, fd: FormData): Pro
     }
     if (value === null) return { error: kind === "amount" ? "Enter the new monthly rent." : "Enter the increase as a %, e.g. 5." };
     const db = await getDb();
-    const editable = await db.query.contracts.findFirst({ where: eq(schema.contracts.id, id) });
+    const editable = await contractInReach(user, id);
     if (!editable || editable.status !== "draft") return { error: "Rooms, rates and rent changes can only be edited on a draft. Activated terms are preserved." };
     if (!Number.isSafeInteger(value) || (kind === "percent" && value < -10000)) return { error: "Enter a valid change; a reduction cannot exceed 100%." };
     if (startMonth > contractMonths(editable.startDate, editable.endDate)) return { error: "The change must fall within the contract term." };
@@ -282,7 +287,7 @@ export async function removeRentStep(contractId: string, stepId: string): Promis
   return mutate(async () => {
     const user = await requireStaff(CAN.manageContracts);
     const db = await getDb();
-    const editable = await db.query.contracts.findFirst({ where: eq(schema.contracts.id, contractId) });
+    const editable = await contractInReach(user, contractId);
     if (!editable || editable.status !== "draft") return { error: "Rooms, rates and rent changes can only be edited on a draft. Activated terms are preserved." };
     await db
       .delete(schema.rentSteps)

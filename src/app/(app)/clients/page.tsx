@@ -1,23 +1,24 @@
 import Link from "next/link";
-import { asc, count, eq } from "drizzle-orm";
+import { and, asc, count, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { Empty, LinkButton, PageHeader, Table, Td, Th } from "@/components/ui";
 
 export default async function ClientsPage() {
-  const user = await requireStaff(CAN.viewClients);
+  const { user, hotel } = await requireHotel(CAN.viewClients);
   const db = await getDb();
   const [clients, contractCounts, occupantCounts] = await Promise.all([
     db.select().from(schema.clients).orderBy(asc(schema.clients.name)),
     db
       .select({ clientId: schema.contracts.clientId, n: count() })
       .from(schema.contracts)
-      .where(eq(schema.contracts.status, "active"))
+      .where(and(eq(schema.contracts.status, "active"), eq(schema.contracts.propertyId, hotel.id)))
       .groupBy(schema.contracts.clientId),
     db
       .select({ clientId: schema.occupants.clientId, n: count() })
       .from(schema.occupants)
-      .where(eq(schema.occupants.status, "active"))
+      .where(and(eq(schema.occupants.status, "active"), eq(schema.occupants.propertyId, hotel.id)))
       .groupBy(schema.occupants.clientId),
   ]);
   const contractsBy = new Map(contractCounts.map((c) => [c.clientId, c.n]));
@@ -27,7 +28,7 @@ export default async function ClientsPage() {
     <>
       <PageHeader
         title="Companies"
-        subtitle="Companies that lease rooms for their people"
+        subtitle={`Companies that lease rooms for their people. Counts are for ${hotel.name}.`}
         actions={CAN.manageContracts.includes(user.role) && <LinkButton href="/clients/new">Add company</LinkButton>}
       />
       {clients.length === 0 ? (

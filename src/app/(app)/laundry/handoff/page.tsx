@@ -1,13 +1,14 @@
 import { and, asc, eq, gte, inArray, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { addDaysISO, formatDate, todayISO } from "@/lib/format";
 import { PrintButton } from "@/components/print-button";
 import { Empty, PageHeader } from "@/components/ui";
 
 /** A printed list that goes with the bags: the shop fills in the kilos and signs. */
 export default async function HandoffPage() {
-  await requireStaff(CAN.handleLaundry);
+  const { hotel } = await requireHotel(CAN.handleLaundry);
   const today = todayISO();
   const db = await getDb();
   // Bags still at the desk, plus any sent to the shop today.
@@ -18,9 +19,12 @@ export default async function HandoffPage() {
     .innerJoin(schema.occupants, eq(schema.laundryLoads.occupantId, schema.occupants.id))
     .leftJoin(schema.rooms, eq(schema.laundryLoads.roomId, schema.rooms.id))
     .where(
-      or(
-        eq(schema.laundryLoads.status, "at_desk"),
-        and(inArray(schema.laundryLoads.status, ["at_shop"]), gte(schema.laundryLoads.sentAt, new Date(addDaysISO(today, -1) + "T16:00:00Z"))),
+      and(
+        eq(schema.laundryServices.propertyId, hotel.id),
+        or(
+          eq(schema.laundryLoads.status, "at_desk"),
+          and(inArray(schema.laundryLoads.status, ["at_shop"]), gte(schema.laundryLoads.sentAt, new Date(addDaysISO(today, -1) + "T16:00:00Z"))),
+        ),
       ),
     )
     .orderBy(asc(schema.rooms.number), asc(schema.laundryLoads.number));

@@ -17,11 +17,15 @@ export type ChecklistDue = { roomId: string; number: string; floor: number; last
  * For each active checklist, every room with the date it's next due: its last finished run
  * plus the checklist's cycle, or today if it was never run.
  */
-export async function checklistsDue(today: string) {
+export async function checklistsDue(today: string, only: { hotelId: string } | { roomId: string }) {
   const db = await getDb();
   const [checklists, rooms, last] = await Promise.all([
     db.select().from(schema.maintenanceChecklists).where(eq(schema.maintenanceChecklists.active, true)).orderBy(asc(schema.maintenanceChecklists.everyDays), asc(schema.maintenanceChecklists.name)),
-    db.select({ id: schema.rooms.id, number: schema.rooms.number, floor: schema.rooms.floor }).from(schema.rooms).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
+    db
+      .select({ id: schema.rooms.id, number: schema.rooms.number, floor: schema.rooms.floor })
+      .from(schema.rooms)
+      .where("hotelId" in only ? eq(schema.rooms.propertyId, only.hotelId) : eq(schema.rooms.id, only.roomId))
+      .orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
     db
       .select({ roomId: schema.checklistRuns.roomId, checklistId: schema.checklistRuns.checklistId, at: max(schema.checklistRuns.finishedAt) })
       .from(schema.checklistRuns)
@@ -41,7 +45,7 @@ export async function checklistsDue(today: string) {
 
 /** One room's checklists and when each is due, for the room page and the door code. */
 export async function roomChecklists(roomId: string, today: string) {
-  const all = await checklistsDue(today);
+  const all = await checklistsDue(today, { roomId });
   return all.map(({ checklist, rooms }) => ({ checklist, ...rooms.find((r) => r.roomId === roomId)! }));
 }
 

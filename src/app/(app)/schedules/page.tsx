@@ -1,6 +1,7 @@
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { formatTimeRange } from "@/lib/format";
 import { daysLabel, getSchedule, groupByDays, SCHEDULE_KIND_LABELS, scheduleTargetLabel, WEEKDAYS } from "@/lib/portal";
 import { ActionForm } from "@/components/action-form";
@@ -9,14 +10,15 @@ import { Card, Empty, Field, FormGrid, Input, PageHeader, SectionTitle, Select, 
 import { addScheduleEntry, removeScheduleEntries } from "./actions";
 
 export default async function SchedulesPage() {
-  const user = await requireStaff();
+  const { user, hotel } = await requireHotel();
   const canManage = CAN.manageSchedules.includes(user.role);
   const db = await getDb();
   const [entries, rooms] = await Promise.all([
-    getSchedule(),
+    getSchedule(hotel.id),
     db
       .select({ id: schema.rooms.id, number: schema.rooms.number, floor: schema.rooms.floor })
       .from(schema.rooms)
+      .where(eq(schema.rooms.propertyId, hotel.id))
       .orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
   ]);
 

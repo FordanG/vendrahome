@@ -1,6 +1,7 @@
 import "server-only";
 import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { inHotelRooms } from "./hotel";
 import type { FeedbackTopic } from "@/db/schema";
 import { addDaysISO, manilaDate, todayISO } from "./format";
 
@@ -53,12 +54,12 @@ export async function toRate(occupantId: string, stay: { roomId: string; checkIn
 }
 
 /** Average stars and count per topic over the last `days` days. */
-export async function feedbackSummary(days: number) {
+export async function feedbackSummary(days: number, hotelId: string) {
   const db = await getDb();
   const rows = await db
     .select({ topic: schema.feedback.topic, stars: schema.feedback.stars })
     .from(schema.feedback)
-    .where(gte(schema.feedback.createdAt, new Date(addDaysISO(todayISO(), -days) + "T16:00:00Z")));
+    .where(and(inHotelRooms(schema.feedback.roomId, hotelId), gte(schema.feedback.createdAt, new Date(addDaysISO(todayISO(), -days) + "T16:00:00Z"))));
   return (Object.keys(TOPIC_LABELS) as FeedbackTopic[]).map((topic) => {
     const mine = rows.filter((r) => r.topic === topic);
     return { topic, count: mine.length, average: mine.length ? mine.reduce((n, r) => n + r.stars, 0) / mine.length : null };

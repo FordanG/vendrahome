@@ -2,7 +2,8 @@ import Link from "next/link";
 import { and, asc, eq, isNull, lte } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { inHotelRooms, requireHotel } from "@/lib/hotel";
 import { getRoomBoard } from "@/lib/rooms";
 import { STATUS_LABELS, STATUS_TONES } from "@/lib/room-status";
 import { addDaysISO, bedsFree, formatDate, todayISO } from "@/lib/format";
@@ -14,7 +15,7 @@ import { STAY_REQUEST_LABELS } from "@/lib/company";
 import { confirmStayRequest, declineStayRequest } from "./actions";
 
 export default async function AssignmentsPage({ searchParams }: PageProps<"/assignments">) {
-  await requireStaff(CAN.manageOccupants);
+  const { hotel } = await requireHotel(CAN.manageOccupants);
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q.trim().toLowerCase() : "";
   const show = sp.show === "free" || sp.show === "occupied" ? sp.show : "all";
@@ -24,7 +25,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
 
   const asker = alias(schema.staff, "asker");
   const [board, unassigned, checkOuts, asks] = await Promise.all([
-    getRoomBoard(today),
+    getRoomBoard(today, hotel.id),
     db
       .select({ id: schema.occupants.id, fullName: schema.occupants.fullName, employeeId: schema.occupants.employeeId })
       .from(schema.occupants)
@@ -32,7 +33,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
         schema.roomAssignments,
         and(eq(schema.roomAssignments.occupantId, schema.occupants.id), isNull(schema.roomAssignments.actualCheckOut)),
       )
-      .where(and(eq(schema.occupants.status, "active"), isNull(schema.roomAssignments.id)))
+      .where(and(eq(schema.occupants.status, "active"), eq(schema.occupants.propertyId, hotel.id), isNull(schema.roomAssignments.id)))
       .orderBy(asc(schema.occupants.fullName)),
     db
       .select({
@@ -48,6 +49,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
         and(
           isNull(schema.roomAssignments.actualCheckOut),
           lte(schema.roomAssignments.expectedCheckOut, horizon),
+          inHotelRooms(schema.roomAssignments.roomId, hotel.id),
         ),
       )
       .orderBy(asc(schema.roomAssignments.expectedCheckOut)),
@@ -58,7 +60,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
       .innerJoin(schema.clients, eq(schema.stayRequests.clientId, schema.clients.id))
       .leftJoin(schema.rooms, eq(schema.stayRequests.roomId, schema.rooms.id))
       .leftJoin(asker, eq(schema.stayRequests.requestedBy, asker.id))
-      .where(eq(schema.stayRequests.status, "pending"))
+      .where(and(eq(schema.stayRequests.status, "pending"), inHotelRooms(schema.stayRequests.roomId, hotel.id)))
       .orderBy(asc(schema.stayRequests.date), asc(schema.stayRequests.createdAt)),
   ]);
   const checkIns = board

@@ -1,14 +1,17 @@
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireTenant } from "@/lib/auth";
+import { tenantHotelId } from "@/lib/portal";
 import { Card, Empty, PageHeader } from "@/components/ui";
 
 export default async function TenantRulesPage() {
-  await requireTenant();
+  const { occupant } = await requireTenant();
+  const hotelId = await tenantHotelId(occupant);
   const db = await getDb();
   const rules = await db
     .select()
     .from(schema.houseRules)
+    .where(eq(schema.houseRules.propertyId, hotelId ?? ""))
     .orderBy(asc(schema.houseRules.position), asc(schema.houseRules.title));
 
   return (

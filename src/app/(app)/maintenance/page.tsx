@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, gte, inArray, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, ne, or } from "drizzle-orm";
 import { visitPermission } from "@/lib/service-work";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff, STAFF_ROLES } from "@/lib/auth";
+import { CAN, STAFF_ROLES } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { addDaysISO, formatDate, formatMoment, formatTimeRange, todayISO } from "@/lib/format";
 import { VISIT_STATUS_LABELS, VISIT_STATUS_TONES } from "@/lib/portal";
 import { ActionForm } from "@/components/action-form";
@@ -94,13 +95,13 @@ function VisitSummary({ v, rooms, count, checkIn }: { v: MaintenanceVisit; rooms
 }
 
 export default async function MaintenancePage({ searchParams }: PageProps<"/maintenance">) {
-  const user = await requireStaff();
+  const { user, hotel } = await requireHotel();
   const canManage = CAN.manageVisits.includes(user.role);
   const view = (await searchParams).view === "past" ? "past" : "upcoming";
   const today = todayISO();
   const db = await getDb();
 
-  const staff = await db.query.staff.findMany({ where: and(eq(schema.staff.active, true), inArray(schema.staff.role, STAFF_ROLES)), orderBy: [asc(schema.staff.name)] });
+  const staff = await db.query.staff.findMany({ where: and(eq(schema.staff.active, true), inArray(schema.staff.role, STAFF_ROLES), or(isNull(schema.staff.propertyId), eq(schema.staff.propertyId, hotel.id))), orderBy: [asc(schema.staff.name)] });
   const visitQuery = db
     .select({ v: schema.maintenanceVisits, roomNumber: schema.rooms.number, floor: schema.rooms.floor })
     .from(schema.maintenanceVisits)
@@ -109,12 +110,13 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
     view === "upcoming"
       ? // Everything still open, including overdue visits nobody closed.
         visitQuery
-          .where(eq(schema.maintenanceVisits.status, "scheduled"))
+          .where(and(eq(schema.maintenanceVisits.status, "scheduled"), eq(schema.rooms.propertyId, hotel.id)))
           .orderBy(asc(schema.maintenanceVisits.date), asc(schema.maintenanceVisits.timeFrom), asc(schema.rooms.number))
       : visitQuery
           .where(
             and(
               ne(schema.maintenanceVisits.status, "scheduled"),
+              eq(schema.rooms.propertyId, hotel.id),
               gte(schema.maintenanceVisits.date, addDaysISO(today, -90)),
             ),
           )
@@ -122,6 +124,7 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
     db
       .select({ id: schema.rooms.id, number: schema.rooms.number, floor: schema.rooms.floor })
       .from(schema.rooms)
+      .where(eq(schema.rooms.propertyId, hotel.id))
       .orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
   ]);
   const permissions = await Promise.all(allVisits.map(({v}) => visitPermission(user, v)));

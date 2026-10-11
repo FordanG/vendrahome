@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { canUseHotel, requireHotel } from "@/lib/hotel";
 import { audit } from "@/lib/audit";
 import { str } from "@/lib/format";
 import { mutate } from "@/lib/mutations";
@@ -22,12 +23,13 @@ function readArea(fd: FormData) {
 
 export async function addArea(_: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async () => {
-    const user = await requireStaff(CAN.manageAreas);
+    const { user, hotel } = await requireHotel(CAN.manageAreas);
     const parsed = readArea(fd);
     if ("error" in parsed) return { error: parsed.error };
     const db = await getDb();
-    if (await db.query.areas.findFirst({ where: eq(schema.areas.name, parsed.value.name) })) return { error: `There's already a place called ${parsed.value.name}.` };
-    const [area] = await db.insert(schema.areas).values({ ...parsed.value, qrToken: newRoomToken() }).returning();
+    if (await db.query.areas.findFirst({ where: and(eq(schema.areas.propertyId, hotel.id), eq(schema.areas.name, parsed.value.name)) }))
+      return { error: `There's already a place called ${parsed.value.name}.` };
+    const [area] = await db.insert(schema.areas).values({ ...parsed.value, propertyId: hotel.id, qrToken: newRoomToken() }).returning();
     await audit(user.id, "create", "area", area.id, parsed.value);
     revalidatePath("/rooms/door-codes");
     return { ok: `${area.name} added. Print its code below.` };
@@ -41,7 +43,10 @@ export async function updateArea(id: string, _: ActionState, fd: FormData): Prom
     if ("error" in parsed) return { error: parsed.error };
     const active = fd.get("active") === "on";
     const db = await getDb();
-    if (await db.query.areas.findFirst({ where: and(eq(schema.areas.name, parsed.value.name), ne(schema.areas.id, id)) })) return { error: `There's already a place called ${parsed.value.name}.` };
+    const current = await db.query.areas.findFirst({ where: eq(schema.areas.id, id) });
+    if (!current || !canUseHotel(user, current.propertyId)) return { error: "Not found." };
+    if (await db.query.areas.findFirst({ where: and(eq(schema.areas.propertyId, current.propertyId), eq(schema.areas.name, parsed.value.name), ne(schema.areas.id, id)) }))
+      return { error: `There's already a place called ${parsed.value.name}.` };
     const newCode = fd.get("newCode") === "on";
     const [area] = await db
       .update(schema.areas)

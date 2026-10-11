@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { requestScope } from "@/lib/service-work";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { roomInReach } from "@/lib/hotel";
 import { getRoomBoard } from "@/lib/rooms";
 import { CONDITION_LABELS, STATUS_LABELS, STATUS_TONES } from "@/lib/room-status";
 import { bedsTaken, formatDate, todayISO } from "@/lib/format";
@@ -23,12 +24,12 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
   const user = await requireStaff();
   const { id } = await params;
   const db = await getDb();
-  const room = await db.query.rooms.findFirst({ where: eq(schema.rooms.id, id) });
+  const room = await roomInReach(user, id);
   if (!room) notFound();
 
   const today = todayISO();
   const [board, roomTypes, history, requests, cleaning] = await Promise.all([
-    getRoomBoard(today),
+    getRoomBoard(today, room.propertyId),
     db.select().from(schema.roomTypes).orderBy(asc(schema.roomTypes.name)),
     db
       .select({ a: schema.roomAssignments, name: schema.occupants.fullName })

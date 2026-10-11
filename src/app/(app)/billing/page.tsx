@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { billingOverview } from "@/lib/billing";
 import { formatDate, formatPeso, todayISO } from "@/lib/format";
 import { Card, Empty, PageHeader, SectionTitle, Table, Td, Th } from "@/components/ui";
@@ -7,17 +8,17 @@ import { Row, RowList } from "@/components/list";
 import { Balance, BillingTabs, StatusBadge } from "./parts";
 
 export default async function BillingPage() {
-  const user = await requireStaff(CAN.viewBilling);
+  const { user, hotel } = await requireHotel(CAN.viewBilling);
   const isAdmin = CAN.manageBilling.includes(user.role);
   const today = todayISO();
-  const { accounts, tenants } = await billingOverview(today);
+  const { accounts, tenants } = await billingOverview(today, hotel.id);
   const owed = accounts.reduce((n, a) => n + Math.max(a.balance, 0), 0) + tenants.reduce((n, t) => n + Math.max(t.balance, 0), 0);
   const overdue = accounts.filter((a) => a.overdue);
   const due = accounts.filter((a) => a.statementDue);
 
   return (
     <>
-      <PageHeader title="Billing" subtitle={`${formatPeso(owed)} owed in total. Statements, payments and charges for each company and tenant.`} />
+      <PageHeader title="Billing" subtitle={`${formatPeso(owed)} owed in total at ${hotel.name}. Statements, payments and charges for each company and tenant.`} />
       <BillingTabs active="accounts" isAdmin={isAdmin} />
 
       {(overdue.length > 0 || (isAdmin && due.length > 0)) && (

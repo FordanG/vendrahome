@@ -7,6 +7,8 @@ import { redirect } from "next/navigation";
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, hashPassword, MIN_PASSWORD, requireStaff } from "@/lib/auth";
+import { occupantInReach, requireHotel, roomInReach } from "@/lib/hotel";
+import type { Staff } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import { addDaysISO, isISODate, str, todayISO } from "@/lib/format";
 import { readOccupantDetails } from "@/lib/occupants";
@@ -33,6 +35,13 @@ function readStay(fd: FormData) {
   } as const;
 }
 
+/** A stay whose tenant is in a hotel this login can reach. */
+async function stayInReach(user: Staff, assignmentId: string) {
+  const db = await getDb();
+  const stay = await db.query.roomAssignments.findFirst({ where: eq(schema.roomAssignments.id, assignmentId) });
+  return stay && (await roomInReach(user, stay.roomId)) ? stay : null;
+}
+
 function refresh(occupantId?: string) {
   revalidatePath("/");
   revalidatePath("/occupants");
@@ -42,7 +51,7 @@ function refresh(occupantId?: string) {
 
 export async function createOccupant(_: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async () => {
-    const user = await requireStaff(CAN.manageOccupants);
+    const { user, hotel } = await requireHotel(CAN.manageOccupants);
     const details = readOccupantDetails((k) => fd.get(k));
     if ("error" in details) return details;
     const clientId = str(fd.get("clientId"));
@@ -53,12 +62,13 @@ export async function createOccupant(_: ActionState, fd: FormData): Promise<Acti
     const db = await getDb();
     let contractId: string | null = null;
     if (stay) {
+      if (!(await roomInReach(user, stay.value.roomId))) return { error: "Room not found." };
       const check = await checkRoomAvailable({ roomId: stay.value.roomId, slot: stay.value.slot, checkIn: stay.value.checkIn, expectedCheckOut: stay.value.expectedCheckOut, clientId });
       if ("error" in check) return check;
       contractId = check.contractId;
     }
 
-    const [occupant] = await db.insert(schema.occupants).values({ ...details.value, clientId }).returning();
+    const [occupant] = await db.insert(schema.occupants).values({ ...details.value, clientId, propertyId: hotel.id }).returning();
     if (stay) {
       await db.insert(schema.roomAssignments).values({
         ...stay.value,
@@ -79,7 +89,7 @@ export async function updateOccupant(id: string, _: ActionState, fd: FormData): 
     const details = readOccupantDetails((k) => fd.get(k));
     if ("error" in details) return details;
     const db = await getDb();
-    const current = await db.query.occupants.findFirst({ where: eq(schema.occupants.id, id) });
+    const current = await occupantInReach(user, id);
     if (!current) return { error: "Tenant not found." };
     const clientId = str(fd.get("clientId"));
     if (clientId !== current.clientId && await openAssignmentFor(id))
@@ -103,15 +113,16 @@ export async function assignRoom(occupantId: string, _: ActionState, fd: FormDat
       return { error: "This tenant already has a room. Use Move to another room instead." };
     }
     const db = await getDb();
-    const occupant = await db.query.occupants.findFirst({ where: eq(schema.occupants.id, occupantId) });
+    const occupant = await occupantInReach(user, occupantId);
     if (!occupant) return { error: "Tenant not found." };
+    if (!(await roomInReach(user, stay.value.roomId))) return { error: "Room not found." };
     const check = await checkRoomAvailable({ ...stay.value, occupantId, clientId: occupant.clientId });
     if ("error" in check) return check;
     const [a] = await db
       .insert(schema.roomAssignments)
       .values({ ...stay.value, occupantId, contractId: check.contractId, assignedBy: user.id })
       .returning();
-    await db.update(schema.occupants).set({ status: "active" }).where(eq(schema.occupants.id, occupantId));
+    await db.update(schema.occupants).set({ status: "active", propertyId: check.propertyId }).where(eq(schema.occupants.id, occupantId));
     await audit(user.id, "assign", "room_assignment", a.id, { occupantId, room: check.roomNumber });
     refresh(occupantId);
     return { ok: `Assigned to room ${check.roomNumber}.` };
@@ -125,13 +136,13 @@ export async function transferRoom(assignmentId: string, _: ActionState, fd: For
     const current = await db.query.roomAssignments.findFirst({
       where: and(eq(schema.roomAssignments.id, assignmentId), isNull(schema.roomAssignments.actualCheckOut)),
     });
-    if (!current) return { error: "This stay has already ended." };
+    if (!current || !(await roomInReach(user, current.roomId))) return { error: "This stay has already ended." };
     const date = str(fd.get("date"));
     const roomId = str(fd.get("roomId"));
     if (!isISODate(date)) return { error: "Enter the date of the move." };
     if (date > todayISO()) return { error: "Record a move only when it happens. Future transfers must not close today's stay." };
     if (date < current.checkIn) return { error: "The move date can't be before they moved in." };
-    if (!roomId) return { error: "Pick the new room." };
+    if (!roomId || !(await roomInReach(user, roomId))) return { error: "Pick the new room." };
     if (roomId === current.roomId && str(fd.get("slot")) === current.slot) return { error: "Pick a different room or bed." };
     const slot = str(fd.get("slot"));
     const occupant = await db.query.occupants.findFirst({ where: eq(schema.occupants.id, current.occupantId) });
@@ -146,6 +157,7 @@ export async function transferRoom(assignmentId: string, _: ActionState, fd: For
     if ("error" in check) return check;
 
     await db.update(schema.roomAssignments).set({ actualCheckOut: date }).where(eq(schema.roomAssignments.id, current.id));
+    await db.update(schema.occupants).set({ propertyId: check.propertyId }).where(eq(schema.occupants.id, current.occupantId));
     const [next] = await db
       .insert(schema.roomAssignments)
       .values({
@@ -170,7 +182,7 @@ export async function checkOut(assignmentId: string, _: ActionState, fd: FormDat
   return mutate(async () => {
     const user = await requireStaff(CAN.manageOccupants);
     const db = await getDb();
-    const current = await db.query.roomAssignments.findFirst({ where: eq(schema.roomAssignments.id, assignmentId) });
+    const current = await stayInReach(user, assignmentId);
     if (!current || current.actualCheckOut) return { error: "This stay has already ended." };
     const date = str(fd.get("date"));
     if (!isISODate(date)) return { error: "Enter the move-out date." };
@@ -195,7 +207,7 @@ export async function editAssignment(assignmentId: string, _: ActionState, fd: F
   return mutate(async () => {
     const user = await requireStaff(CAN.manageOccupants);
     const db = await getDb();
-    const current = await db.query.roomAssignments.findFirst({ where: eq(schema.roomAssignments.id, assignmentId) });
+    const current = await stayInReach(user, assignmentId);
     if (!current) return { error: "Stay not found." };
     const checkIn = str(fd.get("checkIn"));
     const expectedCheckOut = str(fd.get("expectedCheckOut"));
@@ -246,7 +258,7 @@ export async function createTenantLogin(occupantId: string, _: ActionState, fd: 
     if (!username || !/^[a-z0-9._-]{3,}$/.test(username)) return { error: "Username: at least 3 letters or numbers, no spaces." };
     if (password.length < MIN_PASSWORD) return { error: `Password must be at least ${MIN_PASSWORD} characters.` };
     const db = await getDb();
-    const occupant = await db.query.occupants.findFirst({ where: eq(schema.occupants.id, occupantId) });
+    const occupant = await occupantInReach(user, occupantId);
     if (!occupant) return { error: "Tenant not found." };
     if (await db.query.staff.findFirst({ where: eq(schema.staff.occupantId, occupantId) }))
       return { error: "This tenant already has a login." };
@@ -269,6 +281,7 @@ export async function updateTenantLogin(occupantId: string, _: ActionState, fd: 
     const password = String(fd.get("password") ?? "");
     if (password && password.length < MIN_PASSWORD) return { error: `Password must be at least ${MIN_PASSWORD} characters.` };
     const db = await getDb();
+    if (!(await occupantInReach(user, occupantId))) return { error: "Tenant not found." };
     const login = await db.query.staff.findFirst({
       where: and(eq(schema.staff.occupantId, occupantId), eq(schema.staff.role, "tenant")),
     });
@@ -289,7 +302,7 @@ export async function cancelReservation(assignmentId: string): Promise<ActionSta
   return mutate(async () => {
     const user = await requireStaff(CAN.manageOccupants);
     const db = await getDb();
-    const current = await db.query.roomAssignments.findFirst({ where: eq(schema.roomAssignments.id, assignmentId) });
+    const current = await stayInReach(user, assignmentId);
     if (!current || current.actualCheckOut || current.checkIn <= todayISO())
       return { error: "Only a future move-in can be cancelled. Check out an actual stay instead." };
     await audit(user.id, "cancel_reservation", "room_assignment", current.id, { before: current });

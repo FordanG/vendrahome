@@ -2,7 +2,8 @@ import Link from "next/link";
 import { and, count, eq, lte } from "drizzle-orm";
 import { requestScope } from "@/lib/service-work";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { getRoomBoard, STATUS_LABELS, type RoomStatus } from "@/lib/rooms";
 import { STATUS_HELP } from "@/lib/room-status";
 import { addDaysISO, daysBetween, formatDate, todayISO } from "@/lib/format";
@@ -68,7 +69,7 @@ function BoardKey({ types }: { types: (string | null)[] }) {
 }
 
 export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
-  const user = await requireStaff();
+  const { user, hotel } = await requireHotel();
   // Maintenance works on rooms, not people: no tenant names or lease notices on the board.
   const canSeePeople = CAN.manageOccupants.includes(user.role);
   const canSeeContracts = CAN.viewClients.includes(user.role);
@@ -78,8 +79,8 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
 
   const db = await getDb();
   const [all, [{ waiting }]] = await Promise.all([
-    getRoomBoard(today),
-    db.select({ waiting: count() }).from(schema.tenantRequests).where(and(eq(schema.tenantRequests.status, "pending"), requestScope(user))),
+    getRoomBoard(today, hotel.id),
+    db.select({ waiting: count() }).from(schema.tenantRequests).where(and(eq(schema.tenantRequests.status, "pending"), requestScope(user, hotel.id))),
   ]);
   const floors = [...new Set(all.map((r) => r.floor))];
   const perFloor = Math.max(...floors.map((f) => all.filter((r) => r.floor === f).length), 1);
@@ -94,7 +95,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
   const endingContracts = !canSeeContracts ? [] : await db.select({
     id: schema.contracts.id, reference: schema.contracts.reference, endDate: schema.contracts.endDate, clientName: schema.clients.name,
   }).from(schema.contracts).innerJoin(schema.clients, eq(schema.contracts.clientId, schema.clients.id))
-    .where(and(eq(schema.contracts.status, "active"), lte(schema.contracts.endDate, addDaysISO(today, 90))));
+    .where(and(eq(schema.contracts.status, "active"), eq(schema.contracts.propertyId, hotel.id), lte(schema.contracts.endDate, addDaysISO(today, 90))));
   const uncovered = canSeeContracts ? all.filter(r => r.occupants.length > 0 && !r.contract) : [];
   const checkOutsSoon = !canSeePeople ? [] : all.flatMap((r) =>
     r.occupants
@@ -107,7 +108,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
     <>
       <PageHeader
         title="Room board"
-        subtitle={`${formatDate(today)}. ${people} tenants, ${assignable} beds available under current contracts (${beds} physical beds).`}
+        subtitle={`${hotel.name}, ${formatDate(today)}. ${people} tenants, ${assignable} beds available under current contracts (${beds} physical beds).`}
       />
 
       {hasNotices && (

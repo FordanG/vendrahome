@@ -34,6 +34,10 @@ async function main() {
     console.log("Staff accounts already exist; skipped admin.");
   }
 
+  // The first hotel. More hotels are added in the app (Hotels page).
+  let [hotel] = await db.select().from(schema.properties).limit(1);
+  if (!hotel) [hotel] = await db.insert(schema.properties).values({ name: process.env.HOTEL_NAME ?? "Main hotel" }).returning();
+
   let [standard] = await db.select().from(schema.roomTypes).limit(1);
   if (!standard) {
     [standard] = await db
@@ -48,6 +52,7 @@ async function main() {
     for (let floor = 1; floor <= FLOORS; floor++) {
       for (let n = 1; n <= ROOMS_PER_FLOOR; n++) {
         values.push({
+          propertyId: hotel.id,
           number: `${floor}${String(n).padStart(2, "0")}`,
           floor,
           roomTypeId: standard.id,

@@ -34,6 +34,8 @@ const inventory = require('../src/app/(app)/inventory/actions.ts');
 const { checkDifferences } = require('../src/lib/inventory.ts');
 
 const today = todayISO();
+// The first hotel, made by the migration; test rooms and contracts belong to it.
+const HOTEL = '00000000-0000-4000-8000-000000000001';
 let db, admin, desk, fix, company, roomType, contractSerial = 0, roomSerial = 0;
 const fd = (values) => { const form = new FormData(); for (const [k, v] of Object.entries(values)) for (const x of Array.isArray(v) ? v : [v]) form.append(k, String(x ?? '')); return form; };
 const as = (actor, fn, ...args) => actors.run(actor, () => fn(...args));
@@ -45,13 +47,13 @@ async function redirected(actor, fn, ...args) {
 const idFrom = (path) => path.split('/').pop();
 
 async function newContract({ start = addDaysISO(today, -60), rent = 10000000, deposit = 0, rooms = 1, policy = 'full', end } = {}) {
-  const [contract] = await db.insert(schema.contracts).values({
+  const [contract] = await db.insert(schema.contracts).values({ propertyId: HOTEL, 
     clientId: company.id, reference: `C-${++contractSerial}`, startDate: start, endDate: end ?? addDaysISO(start, 729),
     monthlyRent: rent, deposit, partialMonthPolicy: policy, status: 'active',
   }).returning();
   const made = [];
   for (let i = 0; i < rooms; i++) {
-    const [r] = await db.insert(schema.rooms).values({ number: `B${++roomSerial}`, floor: 1, capacity: 2, roomTypeId: roomType.id, qrToken: `bq${roomSerial}` }).returning();
+    const [r] = await db.insert(schema.rooms).values({ propertyId: HOTEL,  number: `B${++roomSerial}`, floor: 1, capacity: 2, roomTypeId: roomType.id, qrToken: `bq${roomSerial}` }).returning();
     await db.insert(schema.contractRooms).values({ contractId: contract.id, roomId: r.id });
     made.push(r);
   }
@@ -68,8 +70,8 @@ before(async () => {
   db = await getDb();
   [admin, desk, fix] = await db.insert(schema.staff).values([
     { name: 'Admin', username: 'b.admin', role: 'admin', passwordHash: 'x' },
-    { name: 'Desk', username: 'b.desk', role: 'front_desk', passwordHash: 'x' },
-    { name: 'Fix', username: 'b.fix', role: 'maintenance', passwordHash: 'x' },
+    { name: 'Desk', username: 'b.desk', role: 'front_desk', propertyId: HOTEL, passwordHash: 'x' },
+    { name: 'Fix', username: 'b.fix', role: 'maintenance', propertyId: HOTEL, passwordHash: 'x' },
   ]).returning();
   [company] = await db.insert(schema.clients).values({ name: 'Billing Co' }).returning();
   [roomType] = await db.insert(schema.roomTypes).values({ name: 'Twin test' }).returning();

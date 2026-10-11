@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { and, asc, eq, ilike, isNull, or, type SQL } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { formatDate, todayISO } from "@/lib/format";
 import { AutoSubmitSelect } from "@/components/auto-submit";
 import { Row, RowLine, RowList, RoomPlate } from "@/components/list";
 import { Badge, Button, Empty, Input, LinkButton, PageHeader, Table, Td, Th } from "@/components/ui";
 
 export default async function OccupantsPage({ searchParams }: PageProps<"/occupants">) {
-  await requireStaff(CAN.manageOccupants);
+  const { hotel } = await requireHotel(CAN.manageOccupants);
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
   const client = typeof sp.client === "string" ? sp.client : "";
@@ -30,6 +31,8 @@ export default async function OccupantsPage({ searchParams }: PageProps<"/occupa
     );
   }
   if (client) filters.push(eq(schema.occupants.clientId, client));
+  // This hotel's tenants, plus people a company added who haven't been given a room anywhere yet.
+  filters.push(or(eq(schema.occupants.propertyId, hotel.id), isNull(schema.occupants.propertyId)));
   if (status !== "all") filters.push(eq(schema.occupants.status, status));
 
   const [rows, clients] = await Promise.all([

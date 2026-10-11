@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { mutate } from "@/lib/mutations";
 import { CAN, requireStaff, STAFF_ROLES } from "@/lib/auth";
+import { requestInReach, roomInReach } from "@/lib/hotel";
 import { audit } from "@/lib/audit";
 import { formatPeso, isHHMM, isISODate, parsePeso, str, todayISO } from "@/lib/format";
 import { addServiceCharge } from "@/lib/billing";
@@ -29,7 +30,7 @@ export async function updateRequest(id: string, _: ActionState, fd: FormData): P
     if ((timeFrom || timeTo) && !scheduledDate) return { error: "Set a date for the appointment times." };
     const db = await getDb();
     const request = await db.query.tenantRequests.findFirst({ where: eq(schema.tenantRequests.id, id) });
-    if (!request || !canHandleRequest(user, request)) return { error: "You cannot handle this request." };
+    if (!request || !canHandleRequest(user, request) || !(await requestInReach(user, request))) return { error: "You cannot handle this request." };
     if (request.cancelledAt) return { error: "The tenant withdrew this request. Create a new request if needed." };
     if (request.awaitingCompany) return { error: "This request is still waiting for the tenant's company to approve it." };
     if (request.kind !== "issue" && status === "approved" && !scheduledDate) return { error: "Set the date you're approving." };
@@ -38,7 +39,7 @@ export async function updateRequest(id: string, _: ActionState, fd: FormData): P
     if (dueDate && !isISODate(dueDate)) return { error: "Enter a valid due date." };
     if (assigneeId) {
       const owner = await db.query.staff.findFirst({ where: eq(schema.staff.id, assigneeId) });
-      if (!owner?.active || !STAFF_ROLES.includes(owner.role) || (request.kind === "laundry" && owner.role === "maintenance"))
+      if (!owner?.active || !STAFF_ROLES.includes(owner.role) || (request.kind === "laundry" && owner.role === "maintenance") || !(await requestInReach(owner, request)))
         return { error: "Choose an active staff member who can handle this kind of work." };
     }
     const keepAppointment = status === "approved" || status === "done";
@@ -64,7 +65,7 @@ export async function createStaffRequest(_: ActionState, fd: FormData): Promise<
     if (!occupantId || !["issue", "maintenance", "laundry"].includes(kind) || !details || details.length > 2000)
       return { error: "Choose a tenant and request type, and enter details (up to 2,000 characters)." };
     const stay = await getCurrentStay(occupantId);
-    if (!stay) return { error: "This tenant has no current room. Assign their room first." };
+    if (!stay || !(await roomInReach(user, stay.room.id))) return { error: "This tenant has no current room. Assign their room first." };
     const db = await getDb();
     const [request] = await db.insert(schema.tenantRequests).values({ occupantId, roomId: stay.room.id, kind, details,
       urgent: fd.get("urgent") === "on", assigneeId: user.id }).returning();
@@ -86,7 +87,7 @@ export async function reportProblem(_: ActionState, fd: FormData): Promise<Actio
     if (!details) return { error: "Say what's wrong." };
     if (details.length > 2000) return { error: "Please keep it under 2,000 characters." };
     const db = await getDb();
-    const room = await db.query.rooms.findFirst({ where: eq(schema.rooms.id, roomId) });
+    const room = await roomInReach(user, roomId);
     if (!room) return { error: "Room not found." };
     const photo = await savePhoto("request", fd.get("photo"), user.id);
     if (photo && "error" in photo) return { error: photo.error };
@@ -121,7 +122,7 @@ export async function recordRepairCost(id: string, _: ActionState, fd: FormData)
     if (paidBy !== "hotel" && !CAN.recordBilling.includes(user.role)) return { error: "Only the front desk or admin can charge a repair to someone." };
     const db = await getDb();
     const request = await db.query.tenantRequests.findFirst({ where: eq(schema.tenantRequests.id, id) });
-    if (!request || !canHandleRequest(user, request)) return { error: "You cannot handle this request." };
+    if (!request || !canHandleRequest(user, request) || !(await requestInReach(user, request))) return { error: "You cannot handle this request." };
     if (request.chargeId) return { error: "This repair was already charged. Reverse the charge in Billing to change it." };
     if (paidBy === "occupant" && !request.occupantId) return { error: "No tenant reported this, so there's no tenant to charge." };
     let chargeId: string | null = null;

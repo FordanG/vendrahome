@@ -23,6 +23,16 @@ const centavos = (name: string) => bigint(name, { mode: "number" });
 // company_admin and company_staff belong to one company and see only its part.
 export const staffRole = pgEnum("staff_role", ["admin", "front_desk", "maintenance", "tenant", "company_admin", "company_staff"]);
 
+// The hotels this business runs. Rooms, contracts and most day-to-day records
+// belong to one hotel; companies, room types and checklists are shared.
+export const properties = pgTable("properties", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  address: text("address"),
+  phone: text("phone"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Every login lives here, staff and tenants alike.
 export const staff = pgTable("staff", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -36,6 +46,8 @@ export const staff = pgTable("staff", {
   occupantId: uuid("occupant_id")
     .unique()
     .references((): AnyPgColumn => occupants.id, { onDelete: "cascade" }),
+  // Hotel staff: the hotel they work at. An admin with none is the owner and sees every hotel.
+  propertyId: uuid("property_id").references((): AnyPgColumn => properties.id),
   // Set only for company logins: the company this login belongs to.
   clientId: uuid("client_id").references((): AnyPgColumn => clients.id, { onDelete: "cascade" }),
   active: boolean("active").notNull().default(true),
@@ -80,7 +92,8 @@ export const roomCondition = pgEnum("room_condition", [
 
 export const rooms = pgTable("rooms", {
   id: uuid("id").primaryKey().defaultRandom(),
-  number: text("number").notNull().unique(),
+  propertyId: uuid("property_id").notNull().references(() => properties.id),
+  number: text("number").notNull(),
   floor: integer("floor").notNull(),
   roomTypeId: uuid("room_type_id").references(() => roomTypes.id, { onDelete: "set null" }),
   capacity: integer("capacity").notNull().default(1),
@@ -89,17 +102,18 @@ export const rooms = pgTable("rooms", {
   qrToken: text("qr_token").notNull().unique(),
   // Regular cleaning: every this many days. Null means no regular cleaning.
   cleanEveryDays: integer("clean_every_days"),
-});
+}, (t) => [uniqueIndex("rooms_property_number").on(t.propertyId, t.number)]);
 
 // Shared spaces with their own door code: kitchen, laundry area, hallways.
 // Tenants who scan one report a problem there.
 export const areas = pgTable("areas", {
   id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull().unique(),
+  propertyId: uuid("property_id").notNull().references(() => properties.id),
+  name: text("name").notNull(),
   floor: integer("floor"),
   qrToken: text("qr_token").notNull().unique(),
   active: boolean("active").notNull().default(true),
-});
+}, (t) => [uniqueIndex("areas_property_name").on(t.propertyId, t.name)]);
 
 export const clients = pgTable("clients", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -132,6 +146,8 @@ export const contracts = pgTable("contracts", {
   clientId: uuid("client_id")
     .notNull()
     .references(() => clients.id),
+  // The hotel whose rooms this contract covers. A company can have contracts at several hotels.
+  propertyId: uuid("property_id").notNull().references(() => properties.id),
   reference: text("reference").notNull(),
   startDate: date("start_date").notNull(),
   endDate: date("end_date").notNull(),
@@ -185,6 +201,8 @@ export const occupants = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     clientId: uuid("client_id").references(() => clients.id, { onDelete: "set null" }),
+    // The hotel they stay at, set when they get a room there. Empty until then.
+    propertyId: uuid("property_id").references(() => properties.id),
     // Identity
     fullName: text("full_name").notNull(),
     nickname: text("nickname"),
@@ -258,6 +276,7 @@ export const auditLog = pgTable("audit_log", {
 
 export const houseRules = pgTable("house_rules", {
   id: uuid("id").primaryKey().defaultRandom(),
+  propertyId: uuid("property_id").notNull().references(() => properties.id),
   title: text("title").notNull(),
   body: text("body"),
   position: integer("position").notNull().default(0),
@@ -270,6 +289,7 @@ export const scheduleKind = pgEnum("schedule_kind", ["kitchen", "laundry"]);
 
 export const weeklySchedule = pgTable("weekly_schedule", {
   id: uuid("id").primaryKey().defaultRandom(),
+  propertyId: uuid("property_id").notNull().references(() => properties.id),
   kind: scheduleKind("kind").notNull(),
   // ISO weekday: 1 = Monday ... 7 = Sunday
   weekday: integer("weekday").notNull(),
@@ -604,6 +624,8 @@ export const roomItems = pgTable(
   "room_items",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // The hotel the item belongs to; with no room it's in that hotel's storeroom.
+    propertyId: uuid("property_id").notNull().references(() => properties.id),
     roomId: uuid("room_id").references(() => rooms.id, { onDelete: "set null" }),
     name: text("name").notNull(),
     category: itemCategory("category").notNull(),
@@ -685,6 +707,7 @@ export const itemEvents = pgTable(
 );
 
 export type Staff = typeof staff.$inferSelect;
+export type Property = typeof properties.$inferSelect;
 export type StaffRole = (typeof staffRole.enumValues)[number];
 export type Room = typeof rooms.$inferSelect;
 export type Client = typeof clients.$inferSelect;
@@ -722,7 +745,9 @@ export type PaymentMethod = (typeof paymentMethod.enumValues)[number];
 // (which adds the charge), and hands them back to the tenant.
 export const laundryServices = pgTable("laundry_services", {
   id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull().unique(),
+  // Each hotel has its own shop and prices.
+  propertyId: uuid("property_id").notNull().references(() => properties.id),
+  name: text("name").notNull(),
   // What the tenant or company pays, and what the shop charges the hotel, per kilo.
   ratePerKilo: centavos("rate_per_kilo").notNull(),
   costPerKilo: centavos("cost_per_kilo"),
@@ -730,7 +755,7 @@ export const laundryServices = pgTable("laundry_services", {
   turnaroundDays: integer("turnaround_days").notNull().default(2),
   active: boolean("active").notNull().default(true),
   position: integer("position").notNull().default(0),
-});
+}, (t) => [uniqueIndex("laundry_services_property_name").on(t.propertyId, t.name)]);
 
 export const laundryStatus = pgEnum("laundry_status", ["at_desk", "at_shop", "ready", "collected", "cancelled"]);
 

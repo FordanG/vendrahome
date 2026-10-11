@@ -1,6 +1,7 @@
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { ActionForm } from "@/components/action-form";
 import { Card, Empty, Field, Input, PageHeader, SectionTitle, Textarea } from "@/components/ui";
 import { createRule, deleteRule, updateRule } from "./actions";
@@ -22,12 +23,13 @@ function RuleFields({ rule }: { rule?: { title: string; body: string | null; pos
 }
 
 export default async function HouseRulesPage() {
-  const user = await requireStaff();
+  const { user, hotel } = await requireHotel();
   const canManage = CAN.manageHouseRules.includes(user.role);
   const db = await getDb();
   const rules = await db
     .select()
     .from(schema.houseRules)
+    .where(eq(schema.houseRules.propertyId, hotel.id))
     .orderBy(asc(schema.houseRules.position), asc(schema.houseRules.title));
 
   return (

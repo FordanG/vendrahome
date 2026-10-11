@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { getRoomOptions } from "@/lib/assignments";
 import { ActionForm } from "@/components/action-form";
 import { Card, Field, PageHeader, Select } from "@/components/ui";
@@ -9,7 +10,7 @@ import { assignPickedOccupant } from "../../occupants/actions";
 import { StayFields } from "../../occupants/occupant-fields";
 
 export default async function NewAssignmentPage({ searchParams }: PageProps<"/assignments/new">) {
-  await requireStaff(CAN.manageOccupants);
+  const { hotel } = await requireHotel(CAN.manageOccupants);
   const { room } = await searchParams;
   const roomId = typeof room === "string" ? room : undefined;
   const db = await getDb();
@@ -21,9 +22,9 @@ export default async function NewAssignmentPage({ searchParams }: PageProps<"/as
         schema.roomAssignments,
         and(eq(schema.roomAssignments.occupantId, schema.occupants.id), isNull(schema.roomAssignments.actualCheckOut)),
       )
-      .where(isNull(schema.roomAssignments.id))
+      .where(and(isNull(schema.roomAssignments.id), or(eq(schema.occupants.propertyId, hotel.id), isNull(schema.occupants.propertyId))))
       .orderBy(asc(schema.occupants.fullName)),
-    getRoomOptions(),
+    getRoomOptions(hotel.id),
   ]);
 
   return (

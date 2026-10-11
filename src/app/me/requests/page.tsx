@@ -8,6 +8,7 @@ import {
   REQUEST_KIND_LABELS,
   REQUEST_STATUS_TONES,
   requestStatusLabel,
+  tenantHotelId,
 } from "@/lib/portal";
 import { ActionForm } from "@/components/action-form";
 import { Badge, Card, Empty, Field, FormGrid, Input, PageHeader, SectionTitle, Select, Textarea } from "@/components/ui";
@@ -36,7 +37,9 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
   ]);
   // Came from a shared space's door code: the form reports a problem there.
   const area = typeof params.area === "string" && /^[0-9a-f-]{36}$/.test(params.area)
-    ? await db.query.areas.findFirst({ where: and(eq(schema.areas.id, params.area), eq(schema.areas.active, true)) })
+    ? await db.query.areas.findFirst({
+        where: and(eq(schema.areas.id, params.area), eq(schema.areas.active, true), eq(schema.areas.propertyId, (await tenantHotelId(occupant)) ?? "")),
+      })
     : undefined;
   const areaIds = [...new Set(requests.map((r) => r.areaId).filter((x): x is string => !!x))];
   const areaNames = new Map(

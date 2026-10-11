@@ -3,9 +3,10 @@
 import { mutate } from "@/lib/mutations";
 
 import { revalidatePath } from "next/cache";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { isOwner, requireHotel, roomInReach } from "@/lib/hotel";
 import { audit } from "@/lib/audit";
 import { isHHMM, str } from "@/lib/format";
 import { parseTarget } from "@/lib/portal";
@@ -19,7 +20,7 @@ function refresh() {
 
 export async function addScheduleEntry(_: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async () => {
-    const user = await requireStaff(CAN.manageSchedules);
+    const { user, hotel } = await requireHotel(CAN.manageSchedules);
     const kind = String(fd.get("kind"));
     const days = fd.getAll("weekday").map(Number);
     const startTime = str(fd.get("startTime"));
@@ -31,8 +32,9 @@ export async function addScheduleEntry(_: ActionState, fd: FormData): Promise<Ac
     if (endTime <= startTime) return { error: "End time must be after the start time." };
     if (!target) return { error: "Pick who this is for." };
 
+    if (target.roomId && (await roomInReach(user, target.roomId))?.propertyId !== hotel.id) return { error: "Pick who this is for." };
     const db = await getDb();
-    const values = days.map((weekday) => ({ kind, weekday, startTime, endTime, note: str(fd.get("note")), ...target }) as const);
+    const values = days.map((weekday) => ({ propertyId: hotel.id, kind, weekday, startTime, endTime, note: str(fd.get("note")), ...target }) as const);
     const created = await db.insert(schema.weeklySchedule).values(values).returning({ id: schema.weeklySchedule.id });
     await audit(user.id, "create", "weekly_schedule", null, { kind, days, startTime, endTime, ...target, ids: created.map((c) => c.id) });
     refresh();
@@ -45,7 +47,9 @@ export async function removeScheduleEntries(ids: string[]): Promise<ActionState>
   return mutate(async () => {
     const user = await requireStaff(CAN.manageSchedules);
     const db = await getDb();
-    await db.delete(schema.weeklySchedule).where(inArray(schema.weeklySchedule.id, ids));
+    await db
+      .delete(schema.weeklySchedule)
+      .where(and(inArray(schema.weeklySchedule.id, ids), isOwner(user) ? undefined : eq(schema.weeklySchedule.propertyId, user.propertyId!)));
     await audit(user.id, "delete", "weekly_schedule", null, { ids });
     refresh();
     return { ok: "Removed." };

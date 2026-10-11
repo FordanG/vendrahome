@@ -53,12 +53,14 @@ const companyActions = require('../src/app/company/actions.ts');
 const stayAsks = require('../src/app/(app)/assignments/actions.ts');
 const { requestScope } = require('../src/lib/service-work.ts');
 const today = todayISO();
+// The first hotel, made by the migration; test rooms and contracts belong to it.
+const HOTEL = '00000000-0000-4000-8000-000000000001';
 let db, admin, fix, otherFix, company, otherCompany, contract;
 const fd = values => { const form = new FormData(); for (const [key,value] of Object.entries(values)) for (const v of Array.isArray(value) ? value : [value]) form.append(key, String(v ?? '')); return form; };
 const run = (fn, ...args) => actors.run(admin, () => fn(...args));
 let serial = 0;
 async function room(capacity = 1, covered = true) {
-  const [r] = await db.insert(schema.rooms).values({ number: `T${++serial}`, floor: 1, capacity, qrToken: `q${serial}` }).returning();
+  const [r] = await db.insert(schema.rooms).values({ propertyId: HOTEL,  number: `T${++serial}`, floor: 1, capacity, qrToken: `q${serial}` }).returning();
   if (covered) await db.insert(schema.contractRooms).values({ contractId: contract.id, roomId: r.id });
   return r;
 }
@@ -73,11 +75,11 @@ before(async () => {
   db = await getDb();
   [admin,fix,otherFix] = await db.insert(schema.staff).values([
     { name:'Admin',username:'test.admin',role:'admin',passwordHash:await auth.hashPassword('password123') },
-    { name:'Fix',username:'test.fix',role:'maintenance',passwordHash:'unused' },
-    { name:'Other',username:'test.other',role:'maintenance',passwordHash:'unused' },
+    { name:'Fix',username:'test.fix',role:'maintenance', propertyId: HOTEL,passwordHash:'unused' },
+    { name:'Other',username:'test.other',role:'maintenance', propertyId: HOTEL,passwordHash:'unused' },
   ]).returning();
   [company,otherCompany] = await db.insert(schema.clients).values([{name:'Company A'},{name:'Company B'}]).returning();
-  [contract] = await db.insert(schema.contracts).values({clientId:company.id,reference:'ACTIVE',startDate:addDaysISO(today,-60),endDate:addDaysISO(today,400),monthlyRent:1000000,status:'active'}).returning();
+  [contract] = await db.insert(schema.contracts).values({ propertyId: HOTEL, clientId:company.id,reference:'ACTIVE',startDate:addDaysISO(today,-60),endDate:addDaysISO(today,400),monthlyRent:1000000,status:'active'}).returning();
 });
 test('calendar dates, safe money and explicit partial-month policy', () => {
   assert.equal(isISODate('2026-02-31'),false);
@@ -112,7 +114,7 @@ test('future arrivals reserve beds but do not become current portal stays', asyn
   const r=await room(); const p=await person();
   assert.ok((await assign(p,r,{checkIn:addDaysISO(today,10)})).ok);
   assert.equal(await getCurrentStay(p.id),null);
-  const board=(await getRoomBoard(today)).find(x=>x.id===r.id);
+  const board=(await getRoomBoard(today, HOTEL)).find(x=>x.id===r.id);
   assert.equal(board.occupants.length,0);assert.equal(board.upcoming.length,1);assert.equal(board.assignableBeds,0);
 });
 test('future actual moves and departures do not alter current occupancy', async () => {
@@ -148,7 +150,7 @@ test('activated contracts preserve rates, rooms and terms; drafts require valid 
   assert.ok((await run(contracts.updateContractRooms,contract.id,{},fd({contractRoomIds:['anything'],intent:'remove'}))).error);
   assert.ok((await run(contracts.addRentStep,contract.id,{},fd({startMonth:2,kind:'percent',value:'5'}))).error);
   assert.ok((await run(contracts.updateContract,contract.id,{},fd({...contract,monthlyRent:'1',deposit:'0',advance:'0',billingDay:1}))).error);
-  const [draft]=await db.insert(schema.contracts).values({clientId:company.id,reference:'DRAFT',startDate:today,endDate:addDaysISO(today,90),rentType:'per_room'}).returning();
+  const [draft]=await db.insert(schema.contracts).values({ propertyId: HOTEL, clientId:company.id,reference:'DRAFT',startDate:today,endDate:addDaysISO(today,90),rentType:'per_room'}).returning();
   await db.insert(schema.contractRooms).values({contractId:draft.id,roomId:r.id});
   assert.ok((await run(contracts.setContractStatus,draft.id,{},fd({status:'active'}))).error);
   assert.ok((await run(contracts.addRentStep,draft.id,{},fd({startMonth:2,kind:'percent',value:'-150'}))).error);
@@ -215,7 +217,7 @@ test('future reservation cancellation releases the bed and retains audit evidenc
 test('database uniqueness protects open stays and rent-step months from direct duplicate inserts', async () => {
   const r=await room(2);const p=await person();await assign(p,r);
   await assert.rejects(db.insert(schema.roomAssignments).values({occupantId:p.id,roomId:r.id,checkIn:today}));
-  const [draft]=await db.insert(schema.contracts).values({clientId:company.id,reference:'Unique steps',startDate:today,endDate:addDaysISO(today,400)}).returning();
+  const [draft]=await db.insert(schema.contracts).values({ propertyId: HOTEL, clientId:company.id,reference:'Unique steps',startDate:today,endDate:addDaysISO(today,400)}).returning();
   const step={contractId:draft.id,startMonth:2,kind:'percent',value:100};
   await db.insert(schema.rentSteps).values(step);
   await assert.rejects(db.insert(schema.rentSteps).values(step));
@@ -247,7 +249,7 @@ test('tenant, front desk, maintenance and admin complete one service lifecycle',
   const r=await room();const p=await person();await assign(p,r);
   const [tenant,desk]=await db.insert(schema.staff).values([
     {name:p.fullName,username:`lifecycle.tenant${serial}`,role:'tenant',occupantId:p.id,passwordHash:'unused'},
-    {name:'Desk',username:`lifecycle.desk${serial}`,role:'front_desk',passwordHash:'unused'},
+    {name:'Desk',username:`lifecycle.desk${serial}`,role:'front_desk', propertyId: HOTEL,passwordHash:'unused'},
   ]).returning();
   const details='WALKTHROUGH TEST — no physical service needed';
   assert.ok((await actors.run(tenant,()=>createRequest({},fd({kind:'maintenance',details,preferredDate:today})))).ok);
@@ -363,10 +365,10 @@ test('door-code check-ins: right room, own visits, no duplicates, replaced codes
 const redirectedTo = async (promise) => { try { await promise; } catch (e) { if (e.to) return e.to; throw e; } assert.fail('expected a redirect'); };
 test('cleaning from the door: front desk only, one open cleaning per room, finishing resets the schedule', async () => {
   const r=await room();
-  const [desk]=await db.insert(schema.staff).values({name:'Desk',username:`clean.desk${++serial}`,role:'front_desk',passwordHash:'unused'}).returning();
+  const [desk]=await db.insert(schema.staff).values({name:'Desk',username:`clean.desk${++serial}`,role:'front_desk', propertyId: HOTEL,passwordHash:'unused'}).returning();
   assert.ok((await run(housekeeping.setCleaningSchedule,{},fd({which:`room:${r.id}`,every:'7'}))).ok);
   assert.ok((await run(housekeeping.setCleaningSchedule,{},fd({which:`room:${r.id}`,every:'0'}))).error);
-  assert.equal((await cleaningsDue(today)).find((d)=>d.id===r.id).due,today);
+  assert.equal((await cleaningsDue(today, HOTEL)).find((d)=>d.id===r.id).due,today);
   await assert.rejects(()=>actors.run(fix,()=>doorCode.startCleaning(r.qrToken)));
   const first=await redirectedTo(actors.run(desk,()=>doorCode.startCleaning(r.qrToken)));
   const again=await redirectedTo(actors.run(admin,()=>doorCode.startCleaning(r.qrToken)));
@@ -380,7 +382,7 @@ test('cleaning from the door: front desk only, one open cleaning per room, finis
   const done=await db.query.cleanings.findFirst({where:eq(schema.cleanings.id,cleaning.id)});
   assert.ok(done.finishedAt); assert.equal(done.steps[0].done,true); assert.equal(done.steps[1].done,false);
   assert.ok((await actors.run(desk,()=>housekeeping.saveCleaning(cleaning.id,{},fd({finish:'1'})))).error);
-  assert.equal((await cleaningsDue(today)).find((d)=>d.id===r.id).due,addDaysISO(today,7));
+  assert.equal((await cleaningsDue(today, HOTEL)).find((d)=>d.id===r.id).due,addDaysISO(today,7));
   await assert.rejects(()=>actors.run(desk,()=>housekeeping.saveChecklist({},fd({steps:'Sweep'}))));
 });
 test('items check from the door records an inventory check-in and opens the right kind', async () => {
@@ -441,7 +443,7 @@ test('laundry: desk to shop to tenant, priced by weight with a minimum, charged 
 });
 test('staff report problems; repair costs charge the right payer once', async () => {
   const r=await room(); const p=await person(); await assign(p,r);
-  const [desk]=await db.insert(schema.staff).values({name:'Desk',username:`repair.desk${++serial}`,role:'front_desk',passwordHash:'unused'}).returning();
+  const [desk]=await db.insert(schema.staff).values({name:'Desk',username:`repair.desk${++serial}`,role:'front_desk', propertyId: HOTEL,passwordHash:'unused'}).returning();
   assert.ok((await actors.run(fix,()=>requests.reportProblem({},fd({roomId:r.id,details:'Leak under sink'})))).ok);
   const staffReport=await db.query.tenantRequests.findFirst({where:eq(schema.tenantRequests.details,'Leak under sink')});
   assert.equal(staffReport.occupantId,null); assert.equal(staffReport.reportedBy,fix.id); assert.equal(staffReport.assigneeId,fix.id);
@@ -466,7 +468,7 @@ test('maintenance checklists: start from the door, every item answered, problems
   assert.ok((await run(checklists.saveChecklistTemplate,null,{},fd({name:`Check ${++serial}`,everyDays:'30',items:'Aircon filter\nLights\nSmoke detector'}))).ok);
   await assert.rejects(()=>actors.run(fix,()=>checklists.saveChecklistTemplate(null,{},fd({name:'x',everyDays:'30',items:'a'}))));
   const list=await db.query.maintenanceChecklists.findFirst({where:eq(schema.maintenanceChecklists.name,`Check ${serial}`)});
-  const dueFor=async()=>(await checklistsDue(today)).find((d)=>d.checklist.id===list.id).rooms.find((x)=>x.roomId===r.id).due;
+  const dueFor=async()=>(await checklistsDue(today, { hotelId: HOTEL })).find((d)=>d.checklist.id===list.id).rooms.find((x)=>x.roomId===r.id).due;
   assert.equal(await dueFor(),today);
   const to=await redirectedTo(actors.run(fix,()=>doorCode.startChecklist(r.qrToken,list.id)));
   assert.equal(to,await redirectedTo(actors.run(fix,()=>doorCode.startChecklist(r.qrToken,list.id))), 'continues the open one');
@@ -530,7 +532,7 @@ test('company logins only touch their own company: people, logins and team', asy
 });
 test('companies ask for move-ins and move-outs; the front desk does them with the usual checks', async () => {
   const hr = await companyLogin('company_admin'); const rival = await companyLogin('company_admin', otherCompany.id);
-  const desk = (await db.insert(schema.staff).values({ name: 'Desk', username: `desk${++serial}`, role: 'front_desk', passwordHash: 'unused' }).returning())[0];
+  const desk = (await db.insert(schema.staff).values({ name: 'Desk', username: `desk${++serial}`, role: 'front_desk', propertyId: HOTEL, passwordHash: 'unused' }).returning())[0];
   const as = (actor, fn, ...args) => actors.run(actor, () => fn(...args));
   const r = await room(1); const outside = await room(1, false); const p = await person();
   assert.ok((await as(hr, companyActions.askMoveIn, p.id, {}, fd({ roomId: outside.id, date: today }))).error, 'room not under their contract');
@@ -562,7 +564,7 @@ test('companies ask for move-ins and move-outs; the front desk does them with th
 });
 test('tenant requests wait for the company when its agreement says so', async () => {
   const hr = await companyLogin('company_staff'); const rival = await companyLogin('company_admin', otherCompany.id);
-  const desk = (await db.insert(schema.staff).values({ name: 'Desk', username: `desk${++serial}`, role: 'front_desk', passwordHash: 'unused' }).returning())[0];
+  const desk = (await db.insert(schema.staff).values({ name: 'Desk', username: `desk${++serial}`, role: 'front_desk', propertyId: HOTEL, passwordHash: 'unused' }).returning())[0];
   const as = (actor, fn, ...args) => actors.run(actor, () => fn(...args));
   const r = await room(); const p = await person(); await assign(p, r);
   const [tenant] = await db.insert(schema.staff).values({ name: p.fullName, username: `ok.tenant${++serial}`, role: 'tenant', occupantId: p.id, passwordHash: 'unused' }).returning();
@@ -584,4 +586,43 @@ test('tenant requests wait for the company when its agreement says so', async ()
   assert.equal(approved.awaitingCompany, false); assert.equal(approved.status, 'pending'); assert.equal(approved.companyReviewedBy, hr.id);
   assert.ok((await as(hr, companyActions.reviewRequest, waiting.id, {}, fd({ decision: 'decline', note: 'x' }))).error, 'only once');
   assert.ok((await as(desk, requests.updateRequest, waiting.id, {}, fd({ status: 'done' }))).ok);
+});
+test('hotels are kept apart: staff only reach their own hotel; the owner reaches all', async () => {
+  const [second] = await db.insert(schema.properties).values({ name: 'Second hotel' }).returning();
+  const [deskA, deskB, hotelAdminB] = await db.insert(schema.staff).values([
+    { name: 'Desk A', username: `deska${++serial}`, role: 'front_desk', propertyId: HOTEL, passwordHash: 'unused' },
+    { name: 'Desk B', username: `deskb${serial}`, role: 'front_desk', propertyId: second.id, passwordHash: 'unused' },
+    { name: 'Admin B', username: `adminb${serial}`, role: 'admin', propertyId: second.id, passwordHash: 'unused' },
+  ]).returning();
+  const as = (actor, fn, ...args) => actors.run(actor, () => fn(...args));
+  const [roomB] = await db.insert(schema.rooms).values({ propertyId: second.id, number: 'T1', floor: 1, qrToken: `qb${serial}` }).returning();
+  const roomA = await room();
+  // The same room number can exist in two hotels.
+  assert.equal(roomB.number, 'T1');
+  // Desk A can't touch hotel B's room, by any route.
+  assert.ok((await as(deskA, roomActions.setRoomCondition, roomB.id, {}, fd({ condition: 'needs_work' }))).error);
+  assert.ok((await as(deskA, requests.reportProblem, {}, fd({ roomId: roomB.id, details: 'Not mine' }))).error);
+  assert.ok((await as(deskA, doorCode.startCleaning, roomB.qrToken)).error);
+  assert.ok((await as(deskB, requests.reportProblem, {}, fd({ roomId: roomA.id, details: 'Not mine either' }))).error);
+  assert.ok((await as(deskB, requests.reportProblem, {}, fd({ roomId: roomB.id, details: 'Leaking tap' }))).ok);
+  // A tenant at hotel A is out of reach for hotel B's desk.
+  const p = await person(); await assign(p, roomA);
+  assert.equal((await db.query.occupants.findFirst({ where: eq(schema.occupants.id, p.id) })).propertyId, HOTEL, 'a stay sets the tenant\'s hotel');
+  assert.ok((await as(deskB, occupancy.updateOccupant, p.id, {}, fd({ fullName: 'Renamed elsewhere' }))).error);
+  // A contract only covers rooms in its own hotel.
+  const [draft] = await db.insert(schema.contracts).values({ propertyId: HOTEL, clientId: company.id, reference: 'MIXED', startDate: today, endDate: addDaysISO(today, 90) }).returning();
+  assert.ok((await run(contracts.addContractRooms, draft.id, {}, fd({ roomIds: [roomB.id] }))).error);
+  assert.ok((await run(contracts.addContractRooms, draft.id, {}, fd({ roomIds: [roomA.id] }))).ok);
+  // The owner reaches both hotels; a hotel's own admin only theirs.
+  assert.ok((await run(roomActions.setRoomCondition, roomB.id, {}, fd({ condition: 'ready' }))).ok);
+  assert.ok((await as(hotelAdminB, roomActions.setRoomCondition, roomA.id, {}, fd({ condition: 'ready' }))).error);
+  // Hotel B's admin can't change hotel A's staff, or make anyone an owner.
+  const staffActions = require('../src/app/(app)/staff/actions.ts');
+  assert.ok((await as(hotelAdminB, staffActions.updateStaff, deskA.id, {}, fd({ role: 'front_desk', active: 'on' }))).error);
+  assert.ok((await as(hotelAdminB, staffActions.createStaff, {}, fd({ name: 'New', username: `newb${serial}`, role: 'admin', password: 'password123', propertyId: '' }))).ok);
+  const made = await db.query.staff.findFirst({ where: eq(schema.staff.username, `newb${serial}`) });
+  assert.equal(made.propertyId, second.id, 'a hotel admin\'s new staff work at their hotel');
+  // The room board of each hotel only shows its own rooms.
+  assert.ok(!(await getRoomBoard(today, HOTEL)).some((r) => r.id === roomB.id));
+  assert.ok((await getRoomBoard(today, second.id)).some((r) => r.id === roomB.id));
 });

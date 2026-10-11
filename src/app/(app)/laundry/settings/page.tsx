@@ -1,6 +1,7 @@
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { centavosToInput, formatPeso } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
 import { Card, Field, FormGrid, Input, PageHeader, SectionTitle } from "@/components/ui";
@@ -32,9 +33,9 @@ function ServiceFields({ s }: { s?: LaundryService }) {
 }
 
 export default async function LaundrySettingsPage() {
-  await requireStaff(CAN.manageLaundryRates);
+  const { hotel } = await requireHotel(CAN.manageLaundryRates);
   const db = await getDb();
-  const services = await db.select().from(schema.laundryServices).orderBy(asc(schema.laundryServices.position), asc(schema.laundryServices.name));
+  const services = await db.select().from(schema.laundryServices).where(eq(schema.laundryServices.propertyId, hotel.id)).orderBy(asc(schema.laundryServices.position), asc(schema.laundryServices.name));
   return (
     <>
       <PageHeader

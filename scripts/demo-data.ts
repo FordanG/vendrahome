@@ -83,8 +83,12 @@ async function add() {
     await client.close();
     return;
   }
-  let rooms = await db.select().from(schema.rooms).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number));
-  if (rooms.length === 0) {
+  // The demo fills the first hotel; other hotels are left alone.
+  const [hotel] = await db.select().from(schema.properties).orderBy(asc(schema.properties.createdAt)).limit(1);
+  let rooms = hotel
+    ? await db.select().from(schema.rooms).where(eq(schema.rooms.propertyId, hotel.id)).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number))
+    : [];
+  if (!hotel || rooms.length === 0) {
     console.log("No rooms yet. Run pnpm db:seed first.");
     await client.close();
     return;
@@ -92,7 +96,7 @@ async function add() {
   const occupiedNow = await db
     .select({ roomId: schema.roomAssignments.roomId })
     .from(schema.roomAssignments)
-    .where(isNull(schema.roomAssignments.actualCheckOut));
+    .where(and(isNull(schema.roomAssignments.actualCheckOut), inArray(schema.roomAssignments.roomId, rooms.map((x) => x.id))));
   if (occupiedNow.length > 0) {
     console.log("Some rooms already have people in them. The demo fills every room, so it only runs on a hotel with no one checked in.");
     await client.close();
@@ -129,15 +133,15 @@ async function add() {
   // One occupied room that staff marked as needing work
   const repaint = rooms.find((r) => r.number === "414") ?? rooms[rooms.length - 2];
   await db.update(schema.rooms).set({ condition: "needs_work", notes: "Bathroom repainting this week." }).where(eq(schema.rooms.id, repaint.id));
-  rooms = await db.select().from(schema.rooms).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number));
+  rooms = await db.select().from(schema.rooms).where(eq(schema.rooms.propertyId, hotel.id)).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number));
   const roomByNumber = new Map(rooms.map((r) => [r.number, r]));
 
   // Staff
   const staffRows = await db
     .insert(schema.staff)
     .values([
-      { name: "Maricel Santos (demo)", username: "demo.desk", role: "front_desk", passwordHash: hash },
-      { name: "Rodel Bautista (demo)", username: "demo.fix", role: "maintenance", passwordHash: hash },
+      { name: "Maricel Santos (demo)", username: "demo.desk", role: "front_desk", propertyId: hotel.id, passwordHash: hash },
+      { name: "Rodel Bautista (demo)", username: "demo.fix", role: "maintenance", propertyId: hotel.id, passwordHash: hash },
       // An admin to try the admin pages with, so the real admin password never has to be shared.
       { name: "Carmela Reyes (demo)", username: "demo.admin", role: "admin", passwordHash: hash },
     ])
@@ -185,6 +189,7 @@ async function add() {
     .insert(schema.contracts)
     .values({
       clientId: company.id,
+      propertyId: hotel.id,
       reference: "DEMO-2026-001",
       startDate,
       endDate: addDaysISO(addDaysISO(startDate, 365 * 2), -1),
@@ -248,8 +253,8 @@ async function add() {
   const occupants = await db
     .insert(schema.occupants)
     .values([
-      ...beds.map((_, i) => ({ ...person(i), status: "active" as const })),
-      ...Array.from({ length: pastCount }, (_, k) => ({ ...person(beds.length + k), status: "inactive" as const })),
+      ...beds.map((_, i) => ({ ...person(i), propertyId: hotel.id, status: "active" as const })),
+      ...Array.from({ length: pastCount }, (_, k) => ({ ...person(beds.length + k), propertyId: hotel.id, status: "inactive" as const })),
     ])
     .returning();
   ids.occupants.push(...occupants.map((o) => o.id));
@@ -299,8 +304,8 @@ async function add() {
   ids.staff.push(...tenantLogins.map((s) => s.id));
 
   // Do not overwrite or duplicate the hotel's published policy with demo content.
-  const hasRules = await db.query.houseRules.findFirst();
-  const rules = hasRules ? [] : await db.insert(schema.houseRules).values(PROPERTY_RULES).returning();
+  const hasRules = await db.query.houseRules.findFirst({ where: eq(schema.houseRules.propertyId, hotel.id) });
+  const rules = hasRules ? [] : await db.insert(schema.houseRules).values(PROPERTY_RULES.map((rule) => ({ ...rule, propertyId: hotel.id }))).returning();
   ids.houseRules.push(...rules.map((r) => r.id));
 
   // Kitchen: each floor has its own breakfast and dinner slot every day. Laundry: pickup Tuesday and Friday.
@@ -309,12 +314,12 @@ async function add() {
   const scheduleValues: (typeof schema.weeklySchedule.$inferInsert)[] = [];
   floors.forEach((floor, i) => {
     for (let weekday = 1; weekday <= 7; weekday++) {
-      scheduleValues.push({ kind: "kitchen", weekday, floor, startTime: pad(5 + i), endTime: pad(6 + i), note: "Breakfast" });
-      scheduleValues.push({ kind: "kitchen", weekday, floor, startTime: pad(17 + (i % 4)), endTime: pad(18 + (i % 4)), note: "Dinner" });
+      scheduleValues.push({ propertyId: hotel.id, kind: "kitchen", weekday, floor, startTime: pad(5 + i), endTime: pad(6 + i), note: "Breakfast" });
+      scheduleValues.push({ propertyId: hotel.id, kind: "kitchen", weekday, floor, startTime: pad(17 + (i % 4)), endTime: pad(18 + (i % 4)), note: "Dinner" });
     }
   });
   for (const weekday of [2, 5]) {
-    scheduleValues.push({ kind: "laundry", weekday, startTime: "08:00", endTime: "10:00", note: "Bags at the lobby by 8 AM, back the next day" });
+    scheduleValues.push({ propertyId: hotel.id, kind: "laundry", weekday, startTime: "08:00", endTime: "10:00", note: "Bags at the lobby by 8 AM, back the next day" });
   }
   const schedule = await db.insert(schema.weeklySchedule).values(scheduleValues).returning();
   ids.schedule.push(...schedule.map((s) => s.id));
@@ -554,7 +559,7 @@ async function addMoneyAndItems(db: DB, ids: DemoIds) {
     const isLoft = typeName.get(room.roomTypeId ?? "") === "Loft";
     const list = ITEM_LIST.filter((it) => !it.loftOnly || isLoft);
     const created = await db.insert(schema.roomItems).values(list.map((it) => ({
-      roomId: room.id, name: it.name, category: it.category, quantity: it.perBed ? room.capacity : it.quantity ?? 1, replacementCost: it.cost,
+      roomId: room.id, propertyId: room.propertyId, name: it.name, category: it.category, quantity: it.perBed ? room.capacity : it.quantity ?? 1, replacementCost: it.cost,
       serviceEveryMonths: it.service ?? null,
       // Second-floor aircons were last cleaned long ago, so they show as due for service.
       lastServicedOn: it.service ? (room.floor === secondFloor ? addDaysISO(today, -175) : addDaysISO(contract.startDate, -10)) : null,

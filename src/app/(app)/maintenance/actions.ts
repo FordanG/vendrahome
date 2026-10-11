@@ -3,9 +3,10 @@
 import { mutate } from "@/lib/mutations";
 
 import { revalidatePath } from "next/cache";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff, STAFF_ROLES } from "@/lib/auth";
+import { canUseHotel, requireHotel } from "@/lib/hotel";
 import { audit } from "@/lib/audit";
 import { isHHMM, isISODate, str } from "@/lib/format";
 import { syncVisitRequest, visitPermission } from "@/lib/service-work";
@@ -22,10 +23,11 @@ function readWhen(fd: FormData) {
   return { value: { date, timeFrom, timeTo } } as const;
 }
 
-async function validAssignee(id: string | null) {
+/** Hotel staff who work at the visit's hotel (or the owner). */
+async function validAssignee(id: string | null, hotelId: string) {
   if (!id) return true;
   const owner = await (await getDb()).query.staff.findFirst({ where: eq(schema.staff.id, id) });
-  return !!owner?.active && STAFF_ROLES.includes(owner.role);
+  return !!owner?.active && STAFF_ROLES.includes(owner.role) && canUseHotel(owner, hotelId);
 }
 
 function refresh() {
@@ -36,7 +38,7 @@ function refresh() {
 /** Books one visit per room covered by the target: every room, a floor, or one room. */
 export async function scheduleVisits(_: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async () => {
-    const user = await requireStaff(CAN.manageVisits);
+    const { user, hotel } = await requireHotel(CAN.manageVisits);
     const title = str(fd.get("title"));
     const when = readWhen(fd);
     const target = parseTarget(str(fd.get("target")));
@@ -46,14 +48,17 @@ export async function scheduleVisits(_: ActionState, fd: FormData): Promise<Acti
 
     const db = await getDb();
     const assigneeId = user.role === "maintenance" ? user.id : str(fd.get("assigneeId"));
-    if (!await validAssignee(assigneeId)) return { error: "Choose an active staff member." };
+    if (!await validAssignee(assigneeId, hotel.id)) return { error: "Choose an active staff member." };
     const rooms = await db.query.rooms.findMany({
       columns: { id: true },
-      where: target.roomId
-        ? eq(schema.rooms.id, target.roomId)
-        : target.floor != null
-          ? eq(schema.rooms.floor, target.floor)
-          : undefined,
+      where: and(
+        eq(schema.rooms.propertyId, hotel.id),
+        target.roomId
+          ? eq(schema.rooms.id, target.roomId)
+          : target.floor != null
+            ? eq(schema.rooms.floor, target.floor)
+            : undefined,
+      ),
     });
     if (rooms.length === 0) return { error: "No rooms match." };
     await db.insert(schema.maintenanceVisits).values(
@@ -78,7 +83,8 @@ export async function updateVisit(id: string, _: ActionState, fd: FormData): Pro
     const denied = await visitPermission(user, before);
     if (denied) return { error: denied };
     const assigneeId = user.role === "maintenance" ? user.id : fd.has("assigneeId") ? str(fd.get("assigneeId")) : before.assigneeId;
-    if (!await validAssignee(assigneeId)) return { error: "Choose an active staff member." };
+    const room = await db.query.rooms.findFirst({ where: eq(schema.rooms.id, before.roomId) });
+    if (!room || !await validAssignee(assigneeId, room.propertyId)) return { error: "Choose an active staff member." };
     const [visit] = await db
       .update(schema.maintenanceVisits)
       .set({ ...when.value, status, assigneeId, notes: str(fd.get("notes")) })

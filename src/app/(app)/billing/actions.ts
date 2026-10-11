@@ -4,6 +4,8 @@ import { and, eq, isNull, lte } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { PaymentMethod } from "@/db/schema";
 import { CAN, requireStaff } from "@/lib/auth";
+import { contractInReach, occupantInReach, roomInReach } from "@/lib/hotel";
+import type { Staff } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import { mutate } from "@/lib/mutations";
 import { addDaysISO, isISODate, parsePeso, str, todayISO } from "@/lib/format";
@@ -20,11 +22,15 @@ import type { ActionState } from "@/lib/action-state";
 
 const BILLABLE = ["active", "ended", "terminated"] as const;
 
-async function billableContract(id: string | null) {
-  if (!id) return null;
-  const db = await getDb();
-  const contract = await db.query.contracts.findFirst({ where: eq(schema.contracts.id, id) });
+async function billableContract(user: Staff, id: string | null) {
+  const contract = await contractInReach(user, id);
   return contract && (BILLABLE as readonly string[]).includes(contract.status) ? contract : null;
+}
+
+/** A charge, payment or deposit entry belongs to a contract or a tenant this login can reach. */
+async function accountInReach(user: Staff, row: { contractId: string | null; occupantId?: string | null }) {
+  if (row.contractId) return !!(await contractInReach(user, row.contractId));
+  return !!(await occupantInReach(user, row.occupantId ?? null));
 }
 
 /** Adds a charge. Who pays follows the contract's charge rule unless staff pick otherwise. */
@@ -49,11 +55,11 @@ export async function addCharge(_: ActionState, fd: FormData): Promise<ActionSta
     if (credit && !CAN.manageBilling.includes(user.role)) return { error: "Only the admin can give a credit." };
 
     if (occupantId) {
-      const occupant = await db.query.occupants.findFirst({ where: eq(schema.occupants.id, occupantId) });
+      const occupant = await occupantInReach(user, occupantId);
       if (!occupant) return { error: "Tenant not found." };
       contractId ??= await contractForOccupant(occupantId, chargedOn);
     }
-    const contract = await billableContract(contractId);
+    const contract = await billableContract(user, contractId);
     if (contractId && !contract) return { error: "That contract can't be billed. Only active or ended contracts have an account." };
 
     const choice = fd.get("billTo");
@@ -63,6 +69,7 @@ export async function addCharge(_: ActionState, fd: FormData): Promise<ActionSta
     if (billTo === "company" && !occupantId) occupantId = null;
 
     let roomId = str(fd.get("roomId"));
+    if (roomId && !(await roomInReach(user, roomId))) return { error: "Room not found." };
     if (!roomId && occupantId) {
       const stay = await db.query.roomAssignments.findFirst({
         where: and(eq(schema.roomAssignments.occupantId, occupantId), lte(schema.roomAssignments.checkIn, chargedOn)),
@@ -94,7 +101,7 @@ export async function reverseCharge(id: string, _: ActionState, fd: FormData): P
     if (!reason) return { error: "Say why it's being reversed, e.g. \"Entered twice\"." };
     const db = await getDb();
     const original = await db.query.charges.findFirst({ where: eq(schema.charges.id, id) });
-    if (!original) return { error: "Charge not found." };
+    if (!original || !(await accountInReach(user, original))) return { error: "Charge not found." };
     if (original.reversesId) return { error: "This is already a correction. Add a new charge instead." };
     const already = await db.query.charges.findFirst({ where: eq(schema.charges.reversesId, id) });
     if (already) return { error: "This charge was already reversed." };
@@ -121,7 +128,7 @@ export async function switchPayer(id: string): Promise<ActionState> {
     const user = await requireStaff(CAN.recordBilling);
     const db = await getDb();
     const charge = await db.query.charges.findFirst({ where: eq(schema.charges.id, id) });
-    if (!charge) return { error: "Charge not found." };
+    if (!charge || !(await accountInReach(user, charge))) return { error: "Charge not found." };
     if (charge.statementId) return { error: "This charge is already on a statement. Reverse it and add it again instead." };
     if (charge.reversesId || (await db.query.charges.findFirst({ where: eq(schema.charges.reversesId, id) })))
       return { error: "Reversed charges can't be moved." };
@@ -129,7 +136,7 @@ export async function switchPayer(id: string): Promise<ActionState> {
     if (type?.code === "rent" || type?.code === "utility") return { error: "Rent and utilities are always billed to the company." };
     const to = charge.billTo === "company" ? "occupant" : "company";
     if (to === "occupant" && !charge.occupantId) return { error: "This charge isn't for a particular tenant, so it stays with the company." };
-    if (to === "company" && !(await billableContract(charge.contractId))) return { error: "This tenant has no contract to bill the company under." };
+    if (to === "company" && !(await billableContract(user, charge.contractId))) return { error: "This tenant has no contract to bill the company under." };
     await db.update(schema.charges).set({ billTo: to }).where(eq(schema.charges.id, id));
     await audit(user.id, "switch_payer", "charge", id, { from: charge.billTo, to });
     return { ok: to === "company" ? "Moved to the company's account." : "Moved to the tenant's account." };
@@ -155,8 +162,8 @@ export async function recordPayment(_: ActionState, fd: FormData): Promise<Actio
     if (["bank_transfer", "gcash", "maya", "check"].includes(method) && !reference)
       return { error: "Enter the reference or check number so the payment can be traced." };
     if (billTo === "company") {
-      if (!(await billableContract(contractId))) return { error: "Pick an active or ended contract." };
-    } else if (!occupantId || !(await db.query.occupants.findFirst({ where: eq(schema.occupants.id, occupantId) }))) {
+      if (!(await billableContract(user, contractId))) return { error: "Pick an active or ended contract." };
+    } else if (!occupantId || !(await occupantInReach(user, occupantId))) {
       return { error: "Tenant not found." };
     }
     const photo = await savePhoto("billing", fd.get("proof"), user.id);
@@ -187,7 +194,7 @@ export async function reversePayment(id: string, _: ActionState, fd: FormData): 
     if (!reason) return { error: "Say why, e.g. \"Check bounced\"." };
     const db = await getDb();
     const original = await db.query.payments.findFirst({ where: eq(schema.payments.id, id) });
-    if (!original) return { error: "Payment not found." };
+    if (!original || !(await accountInReach(user, original))) return { error: "Payment not found." };
     if (original.reversesId) return { error: "This is already a correction." };
     if (await db.query.payments.findFirst({ where: eq(schema.payments.reversesId, id) })) return { error: "This payment was already reversed." };
     const [reversal] = await db.insert(schema.payments).values({
@@ -215,7 +222,7 @@ export async function issueStatement(contractId: string, _: ActionState, fd: For
   return mutate(async () => {
     const user = await requireStaff(CAN.manageBilling);
     const db = await getDb();
-    const contract = await billableContract(contractId);
+    const contract = await billableContract(user, contractId);
     if (!contract) return { error: "Only active or ended contracts get statements." };
     const issuedOn = str(fd.get("issuedOn")) ?? todayISO();
     const dueDate = str(fd.get("dueDate")) ?? addDaysISO(issuedOn, 7);
@@ -270,7 +277,7 @@ export async function addDepositEntry(contractId: string, _: ActionState, fd: Fo
   return mutate(async () => {
     const user = await requireStaff(CAN.manageBilling);
     const db = await getDb();
-    const contract = await billableContract(contractId);
+    const contract = await billableContract(user, contractId);
     if (!contract) return { error: "Only active or ended contracts hold a deposit." };
     const kind = fd.get("kind");
     if (kind !== "received" && kind !== "deduction" && kind !== "refund") return { error: "Pick what happened to the deposit." };
@@ -297,7 +304,7 @@ export async function reverseDepositEntry(id: string, _: ActionState, fd: FormDa
     if (!reason) return { error: "Say why it's being reversed." };
     const db = await getDb();
     const original = await db.query.depositEntries.findFirst({ where: eq(schema.depositEntries.id, id) });
-    if (!original) return { error: "Entry not found." };
+    if (!original || !(await contractInReach(user, original.contractId))) return { error: "Entry not found." };
     if (original.reversesId) return { error: "This is already a correction." };
     if (await db.query.depositEntries.findFirst({ where: eq(schema.depositEntries.reversesId, id) })) return { error: "Already reversed." };
     if (original.kind === "received") {
@@ -330,7 +337,7 @@ export async function setChargeRule(contractId: string, _: ActionState, fd: Form
     const type = chargeTypeId ? await db.query.chargeTypes.findFirst({ where: eq(schema.chargeTypes.id, chargeTypeId) }) : null;
     if (!type) return { error: "Charge type not found." };
     if (type.code === "rent" || type.code === "utility") return { error: "Rent and utilities are always billed to the company." };
-    if (!(await db.query.contracts.findFirst({ where: eq(schema.contracts.id, contractId) }))) return { error: "Contract not found." };
+    if (!(await contractInReach(user, contractId))) return { error: "Contract not found." };
     const where = and(eq(schema.contractChargeRules.contractId, contractId), eq(schema.contractChargeRules.chargeTypeId, type.id));
     if (choice === "company" || choice === "occupant") {
       await db.insert(schema.contractChargeRules).values({ contractId, chargeTypeId: type.id, billTo: choice })

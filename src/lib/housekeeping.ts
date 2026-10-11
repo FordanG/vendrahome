@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, eq, isNotNull, max } from "drizzle-orm";
+import { and, asc, eq, isNotNull, max } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { addDaysISO, daysBetween, formatDate, manilaDate } from "./format";
 
@@ -17,13 +17,13 @@ export type CleaningDue = {
  * Every room on a cleaning schedule with the date its next cleaning is due:
  * the last finished cleaning plus the room's interval, or today if it was never cleaned.
  */
-export async function cleaningsDue(today: string): Promise<CleaningDue[]> {
+export async function cleaningsDue(today: string, hotelId: string): Promise<CleaningDue[]> {
   const db = await getDb();
   const [rooms, last] = await Promise.all([
     db
       .select({ id: schema.rooms.id, number: schema.rooms.number, floor: schema.rooms.floor, cleanEveryDays: schema.rooms.cleanEveryDays })
       .from(schema.rooms)
-      .where(isNotNull(schema.rooms.cleanEveryDays))
+      .where(and(eq(schema.rooms.propertyId, hotelId), isNotNull(schema.rooms.cleanEveryDays)))
       .orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
     db
       .select({ roomId: schema.cleanings.roomId, at: max(schema.cleanings.finishedAt) })

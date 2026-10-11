@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { count, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
+import { isOwner } from "@/lib/hotel";
 import { Card, PageHeader } from "@/components/ui";
 
 export default async function AuditPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
-  await requireStaff(["admin"]);
+  // The history covers every hotel, so only the owner sees it.
+  if (!isOwner(await requireStaff(["admin"]))) notFound();
   const page = Math.max(1, Math.min(100000, Math.floor(Number((await searchParams).page) || 1)));
   const db = await getDb();
   const [rows, [{ total }]] = await Promise.all([

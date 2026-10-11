@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { contractInReach } from "@/lib/hotel";
 import { BRAND } from "@/lib/brand";
 import { PAYMENT_METHOD_LABELS } from "@/lib/billing";
 import { formatDate, formatPeso } from "@/lib/format";
@@ -11,11 +12,11 @@ import { PrintButton } from "@/components/print-button";
 
 /** A frozen monthly statement of account, laid out to print or save as PDF. */
 export default async function StatementPage({ params }: PageProps<"/billing/statements/[id]">) {
-  await requireStaff(CAN.viewBilling);
+  const user = await requireStaff(CAN.viewBilling);
   const { id } = await params;
   const db = await getDb();
   const statement = await db.query.statements.findFirst({ where: eq(schema.statements.id, id) });
-  if (!statement) notFound();
+  if (!statement || !(await contractInReach(user, statement.contractId))) notFound();
   const [contract, lines, payments] = await Promise.all([
     db.query.contracts.findFirst({ where: eq(schema.contracts.id, statement.contractId) }),
     db

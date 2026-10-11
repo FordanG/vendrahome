@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { isOwner, requireHotel, roomInReach } from "@/lib/hotel";
 import { audit } from "@/lib/audit";
 import { str } from "@/lib/format";
 import { newRoomToken } from "@/lib/room-qr";
@@ -68,15 +69,15 @@ function readRoom(fd: FormData) {
 
 export async function createRoom(_: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async () => {
-    const user = await requireStaff(CAN.manageRooms);
+    const { user, hotel } = await requireHotel(CAN.manageRooms);
     const parsed = readRoom(fd);
     if ("error" in parsed) return { error: parsed.error };
     const db = await getDb();
-    const clash = await db.query.rooms.findFirst({ where: eq(schema.rooms.number, parsed.value.number) });
-    if (clash) return { error: `Room ${parsed.value.number} already exists.` };
+    const clash = await db.query.rooms.findFirst({ where: and(eq(schema.rooms.propertyId, hotel.id), eq(schema.rooms.number, parsed.value.number)) });
+    if (clash) return { error: `Room ${parsed.value.number} already exists at ${hotel.name}.` };
     const [room] = await db
       .insert(schema.rooms)
-      .values({ ...parsed.value, qrToken: newRoomToken() })
+      .values({ ...parsed.value, propertyId: hotel.id, qrToken: newRoomToken() })
       .returning();
     await audit(user.id, "create", "room", room.id, { number: room.number });
     revalidatePath("/rooms");
@@ -89,9 +90,11 @@ export async function updateRoom(id: string, _: ActionState, fd: FormData): Prom
     const user = await requireStaff(CAN.manageRooms);
     const parsed = readRoom(fd);
     if ("error" in parsed) return { error: parsed.error };
+    const current = await roomInReach(user, id);
+    if (!current) return { error: "Room not found." };
     const db = await getDb();
     const clash = await db.query.rooms.findFirst({
-      where: and(eq(schema.rooms.number, parsed.value.number), ne(schema.rooms.id, id)),
+      where: and(eq(schema.rooms.propertyId, current.propertyId), eq(schema.rooms.number, parsed.value.number), ne(schema.rooms.id, id)),
     });
     if (clash) return { error: `Another room is already numbered ${parsed.value.number}.` };
     const tooFew = await checkPeopleFit([id], parsed.value.capacity);
@@ -109,6 +112,7 @@ export async function setPeopleAllowed(id: string, _: ActionState, fd: FormData)
     const user = await requireStaff(CAN.manageRooms);
     const allowed = readAllowed(fd);
     if ("error" in allowed) return { error: allowed.error };
+    if (!(await roomInReach(user, id))) return { error: "Room not found." };
     const tooFew = await checkPeopleFit([id], allowed.value);
     if (tooFew) return { error: tooFew };
     const db = await getDb();
@@ -125,7 +129,7 @@ export async function setPeopleAllowed(id: string, _: ActionState, fd: FormData)
  */
 export async function setPeopleAllowedMany(_: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async () => {
-    const user = await requireStaff(CAN.manageRooms);
+    const { user, hotel } = await requireHotel(CAN.manageRooms);
     const allowed = readAllowed(fd);
     if ("error" in allowed) return { error: allowed.error };
     const which = String(fd.get("which") ?? "");
@@ -136,13 +140,16 @@ export async function setPeopleAllowedMany(_: ActionState, fd: FormData): Promis
     const db = await getDb();
     const rooms = await db.query.rooms.findMany({
       columns: { id: true },
-      where: floor
-        ? eq(schema.rooms.floor, Number(floor[1]))
-        : type
-          ? eq(schema.rooms.roomTypeId, type[1])
-          : room
-            ? eq(schema.rooms.id, room[1])
-            : undefined,
+      where: and(
+        eq(schema.rooms.propertyId, hotel.id),
+        floor
+          ? eq(schema.rooms.floor, Number(floor[1]))
+          : type
+            ? eq(schema.rooms.roomTypeId, type[1])
+            : room
+              ? eq(schema.rooms.id, room[1])
+              : undefined,
+      ),
     });
     if (rooms.length === 0) return { error: "No rooms match." };
     const ids = rooms.map((r) => r.id);
@@ -162,6 +169,7 @@ export async function setRoomCondition(id: string, _: ActionState, fd: FormData)
     const user = await requireStaff(["admin", "front_desk", "maintenance"]);
     const condition = String(fd.get("condition"));
     if (!CONDITIONS.includes(condition as (typeof CONDITIONS)[number])) return { error: "Pick a condition." };
+    if (!(await roomInReach(user, id))) return { error: "Room not found." };
     const db = await getDb();
     await db
       .update(schema.rooms)
@@ -178,6 +186,7 @@ export async function setRoomCondition(id: string, _: ActionState, fd: FormData)
 export async function replaceDoorCode(id: string): Promise<ActionState> {
   return mutate(async () => {
     const user = await requireStaff(CAN.manageRooms);
+    if (!(await roomInReach(user, id))) return { error: "Room not found." };
     const db = await getDb();
     const [room] = await db.update(schema.rooms).set({ qrToken: newRoomToken() }).where(eq(schema.rooms.id, id)).returning();
     if (!room) return { error: "Room not found." };
@@ -190,6 +199,7 @@ export async function replaceDoorCode(id: string): Promise<ActionState> {
 export async function deleteRoom(id: string): Promise<ActionState> {
   return mutate(async () => {
     const user = await requireStaff(CAN.manageRooms);
+    if (!(await roomInReach(user, id))) return { error: "Room not found." };
     const db = await getDb();
     const used =
       (await db.query.roomAssignments.findFirst({ where: eq(schema.roomAssignments.roomId, id) })) ??
@@ -219,7 +229,11 @@ export async function saveRoomType(id: string | null, _: ActionState, fd: FormDa
     let changedRooms: string[] = [];
     if (applyToRooms) {
       changedRooms = (
-        await db.query.rooms.findMany({ columns: { id: true }, where: eq(schema.rooms.roomTypeId, id) })
+        await db.query.rooms.findMany({
+          columns: { id: true },
+          // Room types are shared; a hotel's own admin only changes their own hotel's rooms.
+          where: and(eq(schema.rooms.roomTypeId, id), isOwner(user) ? undefined : eq(schema.rooms.propertyId, user.propertyId!)),
+        })
       ).map((r) => r.id);
       const tooFew = await checkPeopleFit(changedRooms, defaultCapacity);
       if (tooFew) return { error: tooFew };

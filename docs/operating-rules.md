@@ -146,3 +146,11 @@ Check room, occupant and assignment counts and representative records before sel
 - Companies can't change rooms themselves. A move-in or move-out is an ask; the front desk confirms it with the usual checks (contract covers the room and date, room ready, a free bed) and confirms move-outs only on the day. One open ask per person.
 - With "approves its tenants' requests" on, a tenant's request waits for the company before the hotel sees it; urgent problems skip the wait. A decline needs a reason, which the tenant sees.
 - Hotel notes on a person stay with the hotel: companies never see or overwrite them.
+
+## Hotels
+
+- The owner is an admin set to "Every hotel". Only the owner adds hotels, sets company agreements and logins, and sees the audit history; there is always at least one.
+- Hotel staff, including a hotel's own admin, work at one hotel. Their lists, the room board and door codes cover that hotel only, and every action re-checks it.
+- A contract covers rooms in one hotel. A company with rooms in two hotels has a contract at each; its company logins see both.
+- Laundry services, house rules and the kitchen and laundry timetable are set per hotel. Room types, item lists, charge types and checklists are shared.
+- Existing data from before hotels were added is the first hotel, "Main hotel"; rename it on the Hotels page.

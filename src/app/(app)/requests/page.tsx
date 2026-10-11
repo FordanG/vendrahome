@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff, STAFF_ROLES } from "@/lib/auth";
+import { CAN, STAFF_ROLES } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { centavosToInput, formatDate, formatPeso, formatTimeRange, todayISO } from "@/lib/format";
 import { REQUEST_KIND_LABELS, REQUEST_STATUS_TONES, requestStatusLabel } from "@/lib/portal";
 import { ActionForm } from "@/components/action-form";
@@ -24,7 +25,7 @@ const PAID_BY_LABELS = { hotel: "the hotel", company: "the company", occupant: "
 const at = new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" });
 
 export default async function RequestsPage({ searchParams }: PageProps<"/requests">) {
-  const user = await requireStaff();
+  const { user, hotel } = await requireHotel();
 
   const canSeePeople = CAN.manageOccupants.includes(user.role);
   const params = await searchParams;
@@ -32,11 +33,11 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
 
   const page = Math.max(1, Math.min(100000, Math.floor(Number(params.page) || 1)));
   const pageSize = 50;
-  const scope = requestScope(user);
+  const scope = requestScope(user, hotel.id);
   const db = await getDb();
-  const staff = await db.query.staff.findMany({ where: and(eq(schema.staff.active, true), inArray(schema.staff.role, STAFF_ROLES)), orderBy: [asc(schema.staff.name)] });
-  const occupants = CAN.manageOccupants.includes(user.role) ? await db.query.occupants.findMany({ orderBy: [asc(schema.occupants.fullName)] }) : [];
-  const rooms = await db.select({ id: schema.rooms.id, number: schema.rooms.number }).from(schema.rooms).orderBy(asc(schema.rooms.number));
+  const staff = await db.query.staff.findMany({ where: and(eq(schema.staff.active, true), inArray(schema.staff.role, STAFF_ROLES), or(isNull(schema.staff.propertyId), eq(schema.staff.propertyId, hotel.id))), orderBy: [asc(schema.staff.name)] });
+  const occupants = CAN.manageOccupants.includes(user.role) ? await db.query.occupants.findMany({ where: eq(schema.occupants.propertyId, hotel.id), orderBy: [asc(schema.occupants.fullName)] }) : [];
+  const rooms = await db.select({ id: schema.rooms.id, number: schema.rooms.number }).from(schema.rooms).where(eq(schema.rooms.propertyId, hotel.id)).orderBy(asc(schema.rooms.number));
   const canCharge = CAN.recordBilling.includes(user.role);
   const [rows, byStatus] = await Promise.all([
     db

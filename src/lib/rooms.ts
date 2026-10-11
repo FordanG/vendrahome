@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, eq, gt, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { inHotelRooms } from "./hotel";
 
 import type { RoomStatus } from "./room-status";
 
@@ -34,8 +35,8 @@ export type BoardRoom = {
   assignableBeds: number;
 };
 
-/** Every room with its derived status as of `today`. */
-export async function getRoomBoard(today: string): Promise<BoardRoom[]> {
+/** Every room of one hotel with its derived status as of `today`. */
+export async function getRoomBoard(today: string, hotelId: string): Promise<BoardRoom[]> {
   const db = await getDb();
 
   const [rooms, contracted, assignments, requests] = await Promise.all([
@@ -43,6 +44,7 @@ export async function getRoomBoard(today: string): Promise<BoardRoom[]> {
       .select({ room: schema.rooms, typeName: schema.roomTypes.name })
       .from(schema.rooms)
       .leftJoin(schema.roomTypes, eq(schema.rooms.roomTypeId, schema.roomTypes.id))
+      .where(eq(schema.rooms.propertyId, hotelId))
       .orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
     db
       .select({
@@ -58,6 +60,7 @@ export async function getRoomBoard(today: string): Promise<BoardRoom[]> {
       .where(
         and(
           eq(schema.contracts.status, "active"),
+          eq(schema.contracts.propertyId, hotelId),
           lte(schema.contracts.startDate, today),
           gte(schema.contracts.endDate, today),
         ),
@@ -75,7 +78,7 @@ export async function getRoomBoard(today: string): Promise<BoardRoom[]> {
       })
       .from(schema.roomAssignments)
       .innerJoin(schema.occupants, eq(schema.roomAssignments.occupantId, schema.occupants.id))
-      .where(or(isNull(schema.roomAssignments.actualCheckOut), gt(schema.roomAssignments.actualCheckOut, today)))
+      .where(and(inHotelRooms(schema.roomAssignments.roomId, hotelId), or(isNull(schema.roomAssignments.actualCheckOut), gt(schema.roomAssignments.actualCheckOut, today))))
       .orderBy(asc(schema.roomAssignments.slot), asc(schema.occupants.fullName)),
     db
       .select({
@@ -90,6 +93,7 @@ export async function getRoomBoard(today: string): Promise<BoardRoom[]> {
           inArray(schema.tenantRequests.kind, ["issue", "maintenance"]),
           inArray(schema.tenantRequests.status, ["pending", "approved"]),
           eq(schema.tenantRequests.awaitingCompany, false),
+          inHotelRooms(schema.tenantRequests.roomId, hotelId),
         ),
       ),
   ]);

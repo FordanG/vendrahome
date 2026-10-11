@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, COMPANY_ROLES, requireStaff, ROLE_LABELS } from "@/lib/auth";
+import { CAN, COMPANY_ROLES, ROLE_LABELS } from "@/lib/auth";
+import { isOwner, requireHotel } from "@/lib/hotel";
 import { AGREEMENT_FIELDS } from "@/lib/company";
 import { formatDate } from "@/lib/format";
 import { ActionForm } from "@/components/action-form";
@@ -12,19 +13,25 @@ import { ClientFields } from "../client-fields";
 import { CONTRACT_STATUS_LABELS, CONTRACT_STATUS_TONES } from "../../contracts/status";
 
 export default async function ClientPage({ params }: PageProps<"/clients/[id]">) {
-  const user = await requireStaff(CAN.viewClients);
+  const { user, hotel, hotels } = await requireHotel(CAN.viewClients);
+  const owner = isOwner(user);
   const { id } = await params;
   const db = await getDb();
   const client = await db.query.clients.findFirst({ where: eq(schema.clients.id, id) });
   if (!client) notFound();
 
-  const canAccounts = CAN.manageCompanyAccounts.includes(user.role);
+  // Company logins see every hotel the company leases in, so only the owner manages them.
+  const canAccounts = CAN.manageCompanyAccounts.includes(user.role) && owner;
   const [contracts, people, logins] = await Promise.all([
-    db.select().from(schema.contracts).where(eq(schema.contracts.clientId, id)).orderBy(desc(schema.contracts.startDate)),
+    db
+      .select()
+      .from(schema.contracts)
+      .where(and(eq(schema.contracts.clientId, id), owner ? undefined : eq(schema.contracts.propertyId, hotel.id)))
+      .orderBy(desc(schema.contracts.startDate)),
     db
       .select({ id: schema.occupants.id })
       .from(schema.occupants)
-      .where(and(eq(schema.occupants.clientId, id), eq(schema.occupants.status, "active"))),
+      .where(and(eq(schema.occupants.clientId, id), eq(schema.occupants.status, "active"), owner ? undefined : eq(schema.occupants.propertyId, hotel.id))),
     canAccounts
       ? db.select().from(schema.staff).where(and(eq(schema.staff.clientId, id), inArray(schema.staff.role, COMPANY_ROLES))).orderBy(asc(schema.staff.name))
       : Promise.resolve([]),
@@ -36,7 +43,7 @@ export default async function ClientPage({ params }: PageProps<"/clients/[id]">)
       <PageHeader
         back={{ href: "/clients", label: "Companies" }}
         title={client.name}
-        subtitle={`${people.length} ${people.length === 1 ? "tenant" : "tenants"} living here now`}
+        subtitle={`${people.length} ${people.length === 1 ? "tenant" : "tenants"} living ${owner && hotels.length > 1 ? "in your hotels" : `at ${hotel.name}`} now`}
         actions={
           <>
             <LinkButton variant="secondary" href={`/occupants?client=${client.id}`}>
@@ -57,6 +64,7 @@ export default async function ClientPage({ params }: PageProps<"/clients/[id]">)
                 <thead>
                   <tr>
                     <Th>Contract</Th>
+                    {owner && hotels.length > 1 && <Th>Hotel</Th>}
                     <Th>Dates</Th>
                     <Th>Status</Th>
                   </tr>
@@ -69,6 +77,7 @@ export default async function ClientPage({ params }: PageProps<"/clients/[id]">)
                           {c.reference}
                         </Link>
                       </Td>
+                      {owner && hotels.length > 1 && <Td label="Hotel">{hotels.find((h) => h.id === c.propertyId)?.name}</Td>}
                       <Td label="Dates" wide>
                         {formatDate(c.startDate)} – {formatDate(c.endDate)}
                       </Td>

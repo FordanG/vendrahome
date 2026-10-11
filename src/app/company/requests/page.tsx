@@ -117,9 +117,9 @@ export default async function CompanyRequestsPage() {
               <Field label="Room">
                 <Select name="roomId" required defaultValue="">
                   <option value="">Pick a room</option>
-                  {rooms.map(({ room }) => (
+                  {rooms.map(({ room, hotel }) => (
                     <option key={room.id} value={room.id}>
-                      Room {room.number}
+                      {hotel}, room {room.number}
                     </option>
                   ))}
                 </Select>

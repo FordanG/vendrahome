@@ -223,14 +223,14 @@ export async function occupantAccount(occupantId: string) {
   return { charges, payments, balance: sum(charges.map((c) => c.charge)) - sum(payments.map((p) => p.payment)) };
 }
 
-/** Every company account and every tenant who owes something, for the billing overview. */
-export async function billingOverview(today: string) {
+/** One hotel's company accounts and tenants who owe something, for the billing overview. */
+export async function billingOverview(today: string, hotelId: string) {
   const db = await getDb();
   const contracts = await db
     .select({ contract: schema.contracts, clientName: schema.clients.name })
     .from(schema.contracts)
     .innerJoin(schema.clients, eq(schema.contracts.clientId, schema.clients.id))
-    .where(inArray(schema.contracts.status, ["active", "ended", "terminated"]))
+    .where(and(eq(schema.contracts.propertyId, hotelId), inArray(schema.contracts.status, ["active", "ended", "terminated"])))
     .orderBy(asc(schema.clients.name), asc(schema.contracts.startDate));
   const accounts = await Promise.all(
     contracts.map(async ({ contract, clientName }) => {
@@ -258,7 +258,7 @@ export async function billingOverview(today: string) {
       paid: sql<number>`coalesce((select sum(p.amount) from payments p where p.occupant_id = "occupants"."id" and p.bill_to = 'occupant'), 0)::bigint`,
     })
     .from(schema.occupants)
-    .where(sql`exists (select 1 from charges c where c.occupant_id = "occupants"."id" and c.bill_to = 'occupant')`)
+    .where(and(eq(schema.occupants.propertyId, hotelId), sql`exists (select 1 from charges c where c.occupant_id = "occupants"."id" and c.bill_to = 'occupant')`))
     .orderBy(asc(schema.occupants.fullName));
   const tenants = tenantRows
     .map((t) => ({ ...t, balance: Number(t.charged) - Number(t.paid) }))

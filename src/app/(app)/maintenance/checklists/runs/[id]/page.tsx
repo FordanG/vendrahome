@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { canUseHotel } from "@/lib/hotel";
 import { formatMoment } from "@/lib/format";
 import { RESULT_LABELS } from "@/lib/checklists";
 import { ActionForm } from "@/components/action-form";
@@ -10,7 +11,7 @@ import { cancelRun, saveRun } from "../../actions";
 
 /** One run of a checklist in a room: mark each item, then finish. */
 export default async function ChecklistRunPage({ params }: PageProps<"/maintenance/checklists/runs/[id]">) {
-  await requireStaff(CAN.runChecklists);
+  const user = await requireStaff(CAN.runChecklists);
   const { id } = await params;
   const db = await getDb();
   const [row] = await db
@@ -21,7 +22,7 @@ export default async function ChecklistRunPage({ params }: PageProps<"/maintenan
     .leftJoin(schema.staff, eq(schema.checklistRuns.staffId, schema.staff.id))
     .leftJoin(schema.roomCheckIns, eq(schema.checklistRuns.checkInId, schema.roomCheckIns.id))
     .where(eq(schema.checklistRuns.id, id));
-  if (!row) notFound();
+  if (!row || !canUseHotel(user, row.room.propertyId)) notFound();
   const { run, room, checklist, name, scannedAt } = row;
   const finished = !!run.finishedAt;
 

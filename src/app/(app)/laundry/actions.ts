@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { CAN, requireStaff } from "@/lib/auth";
+import { canUseHotel, reachRooms, requireHotel, roomInReach } from "@/lib/hotel";
 import { audit } from "@/lib/audit";
 import { formatPeso, manilaDate, parsePeso, str } from "@/lib/format";
 import { chargeLoad, createClaim, formatKilos, laundryPrice, loadLabel, parseKilos } from "@/lib/laundry";
@@ -32,7 +33,8 @@ export async function receiveLoad(_: ActionState, fd: FormData): Promise<ActionS
     const occupant = await db.query.occupants.findFirst({ where: eq(schema.occupants.id, occupantId) });
     if (!occupant) return { error: "Tenant not found." };
     const stay = await getCurrentStay(occupantId);
-    if (!stay) return { error: `${occupant.fullName} doesn't live here right now.` };
+    if (!stay || !canUseHotel(user, stay.room.propertyId)) return { error: `${occupant.fullName} doesn't live here right now.` };
+    if (service.propertyId !== stay.room.propertyId) return { error: "Pick one of this hotel's laundry services." };
     const [load] = await db
       .insert(schema.laundryLoads)
       .values({ occupantId, roomId: stay.room.id, serviceId: service.id, bags, notes: str(fd.get("notes")), receivedBy: user.id })
@@ -53,7 +55,7 @@ export async function sendToShop(_: ActionState, fd: FormData): Promise<ActionSt
     const sent = await db
       .update(schema.laundryLoads)
       .set({ status: "at_shop", sentAt: new Date(), handledBy: user.id })
-      .where(and(inArray(schema.laundryLoads.id, ids), eq(schema.laundryLoads.status, "at_desk")))
+      .where(and(inArray(schema.laundryLoads.id, ids), eq(schema.laundryLoads.status, "at_desk"), reachRooms(user, schema.laundryLoads.roomId)))
       .returning({ number: schema.laundryLoads.number });
     if (sent.length !== ids.length) return { error: "Some of these bags already moved on. Reload the page." };
     await audit(user.id, "send_to_shop", "laundry_load", null, { loads: sent.map((l) => l.number) });
@@ -70,7 +72,7 @@ export async function recordReturn(id: string, _: ActionState, fd: FormData): Pr
     if (!grams) return { error: "Enter the kilos from the shop's slip, e.g. 3.5." };
     const db = await getDb();
     const load = await db.query.laundryLoads.findFirst({ where: eq(schema.laundryLoads.id, id) });
-    if (!load || (load.status !== "at_shop" && load.status !== "at_desk")) return { error: "This load isn't waiting to come back. Reload the page." };
+    if (!load || !(await roomInReach(user, load.roomId)) || (load.status !== "at_shop" && load.status !== "at_desk")) return { error: "This load isn't waiting to come back. Reload the page." };
     const service = await db.query.laundryServices.findFirst({ where: eq(schema.laundryServices.id, load.serviceId) });
     if (!service) return { error: "The load's service no longer exists." };
     const { amount, cost } = laundryPrice(service, grams);
@@ -93,7 +95,7 @@ export async function markCollected(id: string): Promise<ActionState> {
     const [load] = await db
       .update(schema.laundryLoads)
       .set({ status: "collected", collectedAt: new Date(), handledBy: user.id })
-      .where(and(eq(schema.laundryLoads.id, id), eq(schema.laundryLoads.status, "ready")))
+      .where(and(eq(schema.laundryLoads.id, id), eq(schema.laundryLoads.status, "ready"), reachRooms(user, schema.laundryLoads.roomId)))
       .returning();
     if (!load) return { error: "This load isn't ready to pick up. Reload the page." };
     await audit(user.id, "collect", "laundry_load", id, { number: load.number });
@@ -110,7 +112,7 @@ export async function cancelLoad(id: string): Promise<ActionState> {
     const [load] = await db
       .update(schema.laundryLoads)
       .set({ status: "cancelled", handledBy: user.id })
-      .where(and(eq(schema.laundryLoads.id, id), inArray(schema.laundryLoads.status, ["at_desk", "at_shop"])))
+      .where(and(eq(schema.laundryLoads.id, id), inArray(schema.laundryLoads.status, ["at_desk", "at_shop"]), reachRooms(user, schema.laundryLoads.roomId)))
       .returning();
     if (!load) return { error: "Only a load that hasn't come back from the shop can be cancelled." };
     await audit(user.id, "cancel", "laundry_load", id, { number: load.number });
@@ -122,7 +124,7 @@ export async function cancelLoad(id: string): Promise<ActionState> {
 /** Adds or edits a service and its rates. */
 export async function saveService(id: string | null, _: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async () => {
-    const user = await requireStaff(CAN.manageLaundryRates);
+    const { user, hotel } = await requireHotel(CAN.manageLaundryRates);
     const name = str(fd.get("name"));
     const ratePerKilo = parsePeso(fd.get("ratePerKilo"));
     const costRaw = str(fd.get("costPerKilo"));
@@ -136,9 +138,15 @@ export async function saveService(id: string | null, _: ActionState, fd: FormDat
     if (minRaw && minimumCharge == null) return { error: "Enter the minimum charge as an amount, or leave it blank." };
     if (!Number.isInteger(turnaroundDays) || turnaroundDays < 0 || turnaroundDays > 14) return { error: "Days at the shop must be from 0 to 14." };
     const db = await getDb();
-    const clash = await db.query.laundryServices.findFirst({ where: id ? and(eq(schema.laundryServices.name, name), ne(schema.laundryServices.id, id)) : eq(schema.laundryServices.name, name) });
+    // Each hotel has its own services; new ones go to the hotel being looked at.
+    const current = id ? await db.query.laundryServices.findFirst({ where: eq(schema.laundryServices.id, id) }) : null;
+    if (id && (!current || !canUseHotel(user, current.propertyId))) return { error: "Service not found." };
+    const propertyId = current?.propertyId ?? hotel.id;
+    const clash = await db.query.laundryServices.findFirst({
+      where: and(eq(schema.laundryServices.propertyId, propertyId), eq(schema.laundryServices.name, name), id ? ne(schema.laundryServices.id, id) : undefined),
+    });
     if (clash) return { error: `There's already a service called ${name}.` };
-    const values = { name, ratePerKilo, costPerKilo, minimumCharge, turnaroundDays, active: id ? fd.get("active") === "on" : true };
+    const values = { propertyId, name, ratePerKilo, costPerKilo, minimumCharge, turnaroundDays, active: id ? fd.get("active") === "on" : true };
     if (id) await db.update(schema.laundryServices).set(values).where(eq(schema.laundryServices.id, id));
     else await db.insert(schema.laundryServices).values(values);
     await audit(user.id, id ? "update" : "create", "laundry_service", id, values);
@@ -155,6 +163,9 @@ export async function resolveClaim(id: string, _: ActionState, fd: FormData): Pr
     const resolution = str(fd.get("resolution"));
     if (!resolution) return { error: "Say how it was settled, e.g. Shop paid ₱300, found and returned." };
     const db = await getDb();
+    const open = await db.query.laundryClaims.findFirst({ where: eq(schema.laundryClaims.id, id) });
+    const claimLoad = open ? await db.query.laundryLoads.findFirst({ where: eq(schema.laundryLoads.id, open.loadId) }) : null;
+    if (!claimLoad || !(await roomInReach(user, claimLoad.roomId))) return { error: "This claim is already closed." };
     const [claim] = await db
       .update(schema.laundryClaims)
       .set({ status: "resolved", resolution, resolvedBy: user.id, resolvedAt: new Date() })
@@ -171,6 +182,8 @@ export async function resolveClaim(id: string, _: ActionState, fd: FormData): Pr
 export async function addClaim(loadId: string, _: ActionState, fd: FormData): Promise<ActionState> {
   return mutate(async () => {
     const user = await requireStaff(CAN.handleLaundry);
+    const load = await (await getDb()).query.laundryLoads.findFirst({ where: eq(schema.laundryLoads.id, loadId) });
+    if (!load || !(await roomInReach(user, load.roomId))) return { error: "Load not found." };
     const result = await createClaim(loadId, fd, user.id);
     if ("error" in result) return { error: result.error };
     await audit(user.id, "create", "laundry_claim", result.claim.id, { number: result.load.number, kind: result.claim.kind });

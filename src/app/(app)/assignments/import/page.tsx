@@ -1,13 +1,14 @@
 import { asc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { requireHotel } from "@/lib/hotel";
 import { OCCUPANT_FIELDS, STAY_COLUMNS } from "@/lib/occupants";
 import { ActionForm } from "@/components/action-form";
 import { Card, Field, Input, LinkButton, PageHeader, SectionTitle, Select, Textarea } from "@/components/ui";
 import { importOccupants } from "./actions";
 
 export default async function ImportPage() {
-  await requireStaff(CAN.manageOccupants);
+  const { hotel } = await requireHotel(CAN.manageOccupants);
   const db = await getDb();
   const clients = await db
     .select({ id: schema.clients.id, name: schema.clients.name })
@@ -19,7 +20,7 @@ export default async function ImportPage() {
       <PageHeader
         back={{ href: "/assignments", label: "Room assignments" }}
         title="Import tenants"
-        subtitle="Add the company's list of tenants and their rooms in one go, from a spreadsheet."
+        subtitle={`Add the company's list of tenants and their rooms at ${hotel.name} in one go, from a spreadsheet.`}
         actions={
           <LinkButton variant="secondary" href="/assignments/import/template">
             Download template (CSV)

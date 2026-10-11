@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { asc, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { CAN, requireStaff } from "@/lib/auth";
+import { CAN } from "@/lib/auth";
+import { occupantInReach, requireHotel } from "@/lib/hotel";
 import { getRoomOptions } from "@/lib/assignments";
 import { OCCUPANT_FIELDS, OCCUPANT_GROUPS } from "@/lib/occupants";
 import { daysBetween, formatDate, todayISO } from "@/lib/format";
@@ -31,10 +32,10 @@ function Panel({ title, children, open }: { title: string; children: React.React
 }
 
 export default async function OccupantPage({ params }: PageProps<"/occupants/[id]">) {
-  const user = await requireStaff(CAN.manageOccupants);
+  const { user, hotel } = await requireHotel(CAN.manageOccupants);
   const { id } = await params;
   const db = await getDb();
-  const occupant = await db.query.occupants.findFirst({ where: eq(schema.occupants.id, id) });
+  const occupant = await occupantInReach(user, id);
   if (!occupant) notFound();
 
   const [client, clients, history, rooms, login] = await Promise.all([
@@ -47,7 +48,7 @@ export default async function OccupantPage({ params }: PageProps<"/occupants/[id
       .leftJoin(schema.staff, eq(schema.roomAssignments.assignedBy, schema.staff.id))
       .where(eq(schema.roomAssignments.occupantId, id))
       .orderBy(desc(schema.roomAssignments.checkIn), desc(schema.roomAssignments.createdAt)),
-    getRoomOptions(),
+    getRoomOptions(occupant.propertyId ?? hotel.id),
     db.query.staff.findFirst({ where: eq(schema.staff.occupantId, id) }),
   ]);
   const current = history.find((h) => !h.a.actualCheckOut);

@@ -62,7 +62,12 @@ export async function companyRooms(clientId: string, today: string) {
   const ids = [...new Set(covered.map((c) => c.roomId))];
   if (ids.length === 0) return [];
   const [rooms, stays] = await Promise.all([
-    db.select().from(schema.rooms).where(inArray(schema.rooms.id, ids)).orderBy(asc(schema.rooms.floor), asc(schema.rooms.number)),
+    db
+      .select({ room: schema.rooms, hotel: schema.properties.name })
+      .from(schema.rooms)
+      .innerJoin(schema.properties, eq(schema.rooms.propertyId, schema.properties.id))
+      .where(inArray(schema.rooms.id, ids))
+      .orderBy(asc(schema.properties.name), asc(schema.rooms.floor), asc(schema.rooms.number)),
     db
       .select({ a: schema.roomAssignments, name: schema.occupants.fullName, clientId: schema.occupants.clientId })
       .from(schema.roomAssignments)
@@ -75,12 +80,13 @@ export async function companyRooms(clientId: string, today: string) {
       )
       .orderBy(asc(schema.roomAssignments.slot), asc(schema.occupants.fullName)),
   ]);
-  return rooms.map((room) => {
+  return rooms.map(({ room, hotel }) => {
     const mine = stays.filter((s) => s.a.roomId === room.id);
     // A room is only ever under one company at a time, but never show another company's people.
     const people = mine.filter((s) => s.clientId === clientId);
     return {
       room,
+      hotel,
       now: people.filter((s) => s.a.checkIn <= today),
       coming: people.filter((s) => s.a.checkIn > today),
       // Beds already promised to current and future stays.

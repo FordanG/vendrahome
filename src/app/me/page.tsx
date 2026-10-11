@@ -23,9 +23,10 @@ export default async function TenantHomePage() {
   const { user, occupant } = await requireTenant();
   const today = todayISO();
   const db = await getDb();
-  const [stay, schedule, requests, account] = await Promise.all([
-    getCurrentStay(occupant.id),
-    getSchedule(),
+  const stay = await getCurrentStay(occupant.id);
+  const hotelId = stay?.room.propertyId ?? occupant.propertyId;
+  const [schedule, requests, account] = await Promise.all([
+    hotelId ? getSchedule(hotelId) : [],
     db
       .select()
       .from(schema.tenantRequests)

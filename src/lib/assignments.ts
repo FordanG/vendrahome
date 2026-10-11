@@ -20,7 +20,7 @@ type AssignInput = {
  * Call within withTransaction whenever the check is followed by a write.
  */
 export async function checkRoomAvailable(input: AssignInput): Promise<
-  { error: string } | { contractId: string; contractEnd: string; roomNumber: string }
+  { error: string } | { contractId: string; contractEnd: string; roomNumber: string; propertyId: string }
 > {
   const { roomId, slot, checkIn, clientId, occupantId, expectedCheckOut, actualCheckOut, exceptAssignmentId } = input;
   const db = await getDb();
@@ -69,7 +69,7 @@ export async function checkRoomAvailable(input: AssignInput): Promise<
     taken += e.delta;
     if (taken >= room.capacity) return { error: `Room ${room.number} is full during this stay. Confirm departures before assigning another tenant.` };
   }
-  return { contractId: contract.id, contractEnd: contract.endDate, roomNumber: room.number };
+  return { contractId: contract.id, contractEnd: contract.endDate, roomNumber: room.number, propertyId: room.propertyId };
 }
 
 export async function openAssignmentFor(occupantId: string) {
@@ -81,11 +81,11 @@ export async function openAssignmentFor(occupantId: string) {
 
 export type RoomOption = { id: string; number: string; floor: number; capacity: number; taken: number };
 
-/** Capacity committed to current and future stays; forecasts do not free beds. */
-export async function getRoomOptions(): Promise<RoomOption[]> {
+/** One hotel's rooms with capacity committed to current and future stays; forecasts do not free beds. */
+export async function getRoomOptions(hotelId: string): Promise<RoomOption[]> {
   const db = await getDb();
   const [rooms, open] = await Promise.all([
-    db.query.rooms.findMany({ orderBy: (r, { asc }) => [asc(r.floor), asc(r.number)] }),
+    db.query.rooms.findMany({ where: eq(schema.rooms.propertyId, hotelId), orderBy: (r, { asc }) => [asc(r.floor), asc(r.number)] }),
     db.select({ roomId: schema.roomAssignments.roomId }).from(schema.roomAssignments)
       .where(or(isNull(schema.roomAssignments.actualCheckOut), gt(schema.roomAssignments.actualCheckOut, todayISO()))),
   ]);

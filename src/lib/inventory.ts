@@ -31,13 +31,18 @@ export const CHECK_KIND_LABELS: Record<InventoryCheckKind, string> = {
 const RANK: Record<ItemCondition, number> = { good: 0, fair: 1, damaged: 2, missing: 3 };
 export const isWorse = (after: ItemCondition, before: ItemCondition) => RANK[after] > RANK[before];
 
-/** Items in a room (or the storeroom when roomId is null) that haven't been retired. */
-export async function itemsIn(roomId: string | null) {
+/** Items in a room (or the hotel's storeroom when roomId is null) that haven't been retired. */
+export async function itemsIn(roomId: string | null, hotelId?: string) {
   const db = await getDb();
   return db
     .select()
     .from(schema.roomItems)
-    .where(and(roomId ? eq(schema.roomItems.roomId, roomId) : isNull(schema.roomItems.roomId), isNull(schema.roomItems.retiredOn)))
+    .where(
+      and(
+        roomId ? eq(schema.roomItems.roomId, roomId) : and(isNull(schema.roomItems.roomId), eq(schema.roomItems.propertyId, hotelId ?? "")),
+        isNull(schema.roomItems.retiredOn),
+      ),
+    )
     .orderBy(asc(schema.roomItems.category), asc(schema.roomItems.name));
 }
 
@@ -124,14 +129,14 @@ export async function checkDifferences(check: InventoryCheck) {
 }
 
 /** Rooms covered by an active contract that have no contract-start check yet. */
-export async function roomsWithoutStartCheck() {
+export async function roomsWithoutStartCheck(hotelId: string) {
   const db = await getDb();
   const covered = await db
     .select({ roomId: schema.contractRooms.roomId, contractId: schema.contracts.id, number: schema.rooms.number, floor: schema.rooms.floor })
     .from(schema.contractRooms)
     .innerJoin(schema.contracts, eq(schema.contractRooms.contractId, schema.contracts.id))
     .innerJoin(schema.rooms, eq(schema.contractRooms.roomId, schema.rooms.id))
-    .where(eq(schema.contracts.status, "active"))
+    .where(and(eq(schema.contracts.status, "active"), eq(schema.contracts.propertyId, hotelId)))
     .orderBy(asc(schema.rooms.floor), asc(schema.rooms.number));
   if (covered.length === 0) return [];
   const done = await db
@@ -144,13 +149,13 @@ export async function roomsWithoutStartCheck() {
 }
 
 /** Everything that needs someone's attention, for the inventory overview. */
-export async function inventoryAttention(today: string) {
+export async function inventoryAttention(today: string, hotelId: string) {
   const db = await getDb();
   const live = await db
     .select({ item: schema.roomItems, roomNumber: schema.rooms.number, floor: schema.rooms.floor })
     .from(schema.roomItems)
     .leftJoin(schema.rooms, eq(schema.roomItems.roomId, schema.rooms.id))
-    .where(isNull(schema.roomItems.retiredOn))
+    .where(and(eq(schema.roomItems.propertyId, hotelId), isNull(schema.roomItems.retiredOn)))
     .orderBy(asc(schema.rooms.floor), asc(schema.rooms.number), asc(schema.roomItems.name));
   const problems = live.filter((r) => r.item.condition === "damaged" || r.item.condition === "missing");
   const soon = addDaysISO(today, 14);
@@ -158,5 +163,5 @@ export async function inventoryAttention(today: string) {
     .map((r) => ({ ...r, due: nextServiceDate(r.item) }))
     .filter((r): r is typeof r & { due: string } => !!r.due && r.due <= soon)
     .sort((a, b) => (a.due < b.due ? -1 : 1));
-  return { live, problems, service, noStartCheck: await roomsWithoutStartCheck() };
+  return { live, problems, service, noStartCheck: await roomsWithoutStartCheck(hotelId) };
 }
