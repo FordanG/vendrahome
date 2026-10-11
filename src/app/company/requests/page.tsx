@@ -147,7 +147,11 @@ function RequestSummary({ r, name, number }: { r: TenantRequest; name: string | 
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium">{REQUEST_KIND_LABELS[r.kind]}</span>
         <Badge tone={r.awaitingCompany ? "amber" : REQUEST_STATUS_TONES[r.status]}>
-          {r.awaitingCompany ? "Waiting for your OK" : requestStatusLabel({ ...r, awaitingCompany: false })}
+          {r.awaitingCompany
+            ? "Waiting for your OK"
+            : r.status === "pending" && !r.cancelledAt
+              ? "With the front desk"
+              : requestStatusLabel({ ...r, awaitingCompany: false })}
         </Badge>
         {r.urgent && <Badge tone="red">Urgent</Badge>}
       </div>

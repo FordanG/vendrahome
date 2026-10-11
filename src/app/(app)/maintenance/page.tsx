@@ -44,7 +44,7 @@ function VisitForm({ v, staff, canAssign }: { v: MaintenanceVisit; staff: { id: 
   return (
     <ActionForm action={updateVisit.bind(null, v.id)}>
       <FormGrid>
-        {canAssign ? <Field label="Assigned to"><Select name="assigneeId" defaultValue={v.assigneeId ?? ""}><option value="">Unassigned</option>{staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>
+        {canAssign ? <Field label="Assigned to"><Select name="assigneeId" defaultValue={v.assigneeId ?? ""}><option value="">Nobody yet</option>{staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>
           : <p className="text-sm text-muted sm:col-span-2">{v.assigneeId ? "Assigned to you." : "Saving this visit assigns it to you."}</p>}
         <Field label="Status">
           <Select name="status" defaultValue={v.status}>
@@ -88,7 +88,8 @@ function VisitSummary({ v, rooms, count, checkIn }: { v: MaintenanceVisit; rooms
       </span>
       <span className="mt-2 flex gap-2 sm:order-5 sm:ml-auto sm:mt-0">
         {v.requestId && <Badge>Asked by tenant</Badge>}
-        <Badge tone={VISIT_STATUS_TONES[v.status]}>{VISIT_STATUS_LABELS[v.status]}</Badge>
+        {/* On the scheduled list every visit is scheduled; the date heading already says when one is overdue. */}
+        {v.status !== "scheduled" && <Badge tone={VISIT_STATUS_TONES[v.status]}>{VISIT_STATUS_LABELS[v.status]}</Badge>}
       </span>
     </summary>
   );
@@ -159,7 +160,7 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
         title="Maintenance visits"
         subtitle={
           view === "upcoming"
-            ? `${visits.length} scheduled${overdue ? `, ${overdue} overdue` : ""}. Tenants see the visits for their room.`
+            ? `${visits.length} room ${visits.length === 1 ? "visit" : "visits"} scheduled${overdue ? `, ${overdue} overdue` : ""}. Tenants see the visits for their room.`
             : "Done, missed and cancelled visits from the last 90 days."
         }
         actions={
@@ -261,7 +262,7 @@ export default async function MaintenancePage({ searchParams }: PageProps<"/main
           <Card className="self-start lg:sticky lg:top-8">
             <SectionTitle>Schedule a visit</SectionTitle>
             <ActionForm action={scheduleVisits} submitLabel="Schedule" resetOnSuccess>
-              {user.role !== "maintenance" && <Field label="Assigned to"><Select name="assigneeId"><option value="">Unassigned</option>{staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>}
+              {user.role !== "maintenance" && <Field label="Assigned to"><Select name="assigneeId"><option value="">Nobody yet</option>{staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>}
               <Field label="What for" hint="e.g. Aircon cleaning, Monthly room check, Pest control">
                 <Input name="title" required />
               </Field>

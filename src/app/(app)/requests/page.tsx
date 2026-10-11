@@ -166,7 +166,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                   )}
                   {when && <>, asked for {when}</>}
                 </p>
-                <p className="mt-2 text-sm text-muted">Assigned to {staff.find(s => s.id === r.assigneeId)?.name ?? "Unassigned"}
+                <p className="mt-2 text-sm text-muted">Assigned to {staff.find(s => s.id === r.assigneeId)?.name ?? "nobody yet"}
                   {r.dueDate && <span className={r.dueDate < todayISO() && view !== "closed" ? "text-attention" : ""}> · Due {formatDate(r.dueDate)}</span>}
                 </p>
                 {(set || r.response) && (
@@ -212,7 +212,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                       <ActionForm action={updateRequest.bind(null, r.id)}>
                         <FormGrid>
                           {user.role !== "maintenance" && <Field label="Assigned to">
-                            <Select name="assigneeId" defaultValue={r.assigneeId ?? ""}><option value="">Unassigned</option>{staff.filter(s => r.kind !== "laundry" || s.role !== "maintenance").map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>
+                            <Select name="assigneeId" defaultValue={r.assigneeId ?? ""}><option value="">Nobody yet</option>{staff.filter(s => r.kind !== "laundry" || s.role !== "maintenance").map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>
                           </Field>}
                           <Field label="Due date"><Input type="date" name="dueDate" defaultValue={r.dueDate ?? ""} /></Field>
                           <Field label="Status">
@@ -251,7 +251,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
       </div>
       <nav className="mt-5 flex gap-5" aria-label="Request pages">
         {page > 1 && <Link className="underline" href={`/requests?view=${view}&page=${page - 1}`}>Previous</Link>}
-        <span>Page {page}</span>
+        {(page > 1 || page * pageSize < countFor(view)) && <span>Page {page}</span>}
         {page * pageSize < countFor(view) && <Link className="underline" href={`/requests?view=${view}&page=${page + 1}`}>Next</Link>}
       </nav>
     </>

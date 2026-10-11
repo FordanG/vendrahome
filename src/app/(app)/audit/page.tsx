@@ -4,7 +4,7 @@ import { getDb, schema } from "@/db";
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
 import { isOwner } from "@/lib/hotel";
-import { Card, PageHeader } from "@/components/ui";
+import { Card, Empty, PageHeader } from "@/components/ui";
 
 export default async function AuditPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   // The history covers every hotel, so only the owner sees it.
@@ -19,6 +19,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
   ]);
   return <>
     <PageHeader title="Audit history" subtitle="Who changed records and when. Details may contain personal information; admin access only." />
+    {rows.length === 0 && <Empty>No changes recorded yet. Every change staff make shows up here.</Empty>}
     <div className="space-y-3">{rows.map(({ log, name }) => <Card key={log.id}>
       <p className="text-sm font-semibold">{name ?? "System"}: {log.action} · {log.entity}</p>
       <p className="text-xs text-muted">{log.at.toLocaleString("en-PH", { timeZone: "Asia/Manila" })} · {log.entityId}</p>
@@ -26,7 +27,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
     </Card>)}</div>
     <nav aria-label="Audit pages" className="mt-5 flex gap-5">
       {page > 1 && <Link className="underline" href={`/audit?page=${page - 1}`}>Previous</Link>}
-      <span>Page {page} · {total} events</span>
+      {total > 50 && <span>Page {page} of {Math.ceil(total / 50)}</span>}
       {page * 50 < total && <Link className="underline" href={`/audit?page=${page + 1}`}>Next</Link>}
     </nav>
   </>;

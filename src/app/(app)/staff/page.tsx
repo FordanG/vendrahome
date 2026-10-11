@@ -20,9 +20,9 @@ function RoleSelect({ defaultValue }: { defaultValue?: string }) {
 }
 
 /** The owner picks where each login works; "Every hotel" makes an admin another owner. */
-function HotelSelect({ hotels, defaultValue }: { hotels: Property[]; defaultValue?: string | null }) {
+function HotelSelect({ hotels, defaultValue, hint }: { hotels: Property[]; defaultValue?: string | null; hint?: boolean }) {
   return (
-    <Field label="Works at" hint="Every hotel is for admins only: they see and switch between all hotels." className="sm:col-span-2">
+    <Field label="Works at" hint={hint ? "Every hotel is for admins only: they see and switch between all hotels." : undefined} className="sm:col-span-2">
       <Select name="propertyId" defaultValue={defaultValue ?? ""}>
         <option value="">Every hotel (admins only)</option>
         {hotels.map((h) => (
@@ -98,7 +98,7 @@ export default async function StaffPage() {
               <Field label="Role" className="sm:col-span-2">
                 <RoleSelect />
               </Field>
-              {owner && <HotelSelect hotels={hotels} defaultValue={hotel.id} />}
+              {owner && <HotelSelect hotels={hotels} defaultValue={hotel.id} hint />}
               <Field label="Password" hint="At least 8 characters" className="sm:col-span-2">
                 <Input name="password" type="password" autoComplete="new-password" required />
               </Field>

@@ -50,6 +50,10 @@ export default async function CompanyBillingPage() {
 
             <div>
               <SectionTitle>Statements</SectionTitle>
+              <p className="mb-2 text-sm text-muted">
+                Rent is billed at the start of each month of the contract. A statement shows what was owed on the day it was issued; payments after
+                that are counted in the balance above.
+              </p>
               {account.statements.length === 0 ? (
                 <Empty>No statements yet.</Empty>
               ) : (
@@ -135,7 +139,7 @@ export default async function CompanyBillingPage() {
                         <Td primary>{formatDate(payment.receivedOn)}</Td>
                         <Td label="How">{PAYMENT_METHOD_LABELS[payment.method]}</Td>
                         <Td label="Reference">
-                          {payment.officialReceiptNo ? `OR ${payment.officialReceiptNo}` : payment.reference ?? "None"}
+                          {payment.officialReceiptNo ? `Receipt ${payment.officialReceiptNo}` : payment.reference ?? "None"}
                           {(reversed || payment.reversesId) && <span className="block text-xs text-muted">Corrected</span>}
                         </Td>
                         <Td label="Amount" className="sm:text-right">

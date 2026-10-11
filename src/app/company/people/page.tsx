@@ -40,17 +40,17 @@ export default async function CompanyPeoplePage({ searchParams }: PageProps<"/co
     <>
       <PageHeader
         title="People"
-        subtitle={`${stays.filter((s) => s.checkIn <= today).length} living here now. ${asks.length ? `${asks.length} ${asks.length === 1 ? "move is" : "moves are"} waiting for the front desk.` : ""}`}
+        subtitle={`${stays.filter((s) => s.checkIn <= today).length} living here now.${asks.length ? ` ${asks.length} ${asks.length === 1 ? "move is" : "moves are"} waiting for the front desk.` : ""} Open a person to ask for a room or a move-out.`}
         actions={client.selfManagePeople ? <LinkButton href="/company/people/new">Add a person</LinkButton> : undefined}
       />
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-4 space-y-3 sm:flex sm:flex-wrap sm:items-center sm:gap-3 sm:space-y-0">
         <ViewTabs
           items={[
             { href: "/company/people", label: "Here or moving", count: here.length, active: show === "here" },
             { href: "/company/people?show=all", label: "Everyone", count: people.length, active: show === "all" },
           ]}
         />
-        <form className="flex-1">
+        <form className="sm:flex-1">
           {show === "all" && <input type="hidden" name="show" value="all" />}
           <input
             name="q"

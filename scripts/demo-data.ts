@@ -55,6 +55,7 @@ type DemoIds = {
   visits: string[];
   requests: string[];
   roomTypes?: string[];
+  laundryServices?: string[];
   // Added with billing and inventory (older demo files don't have these yet).
   money?: { statements: string[]; charges: string[]; payments: string[]; deposits: string[]; utilityBills: string[] };
   items?: { templates: string[]; roomItems: string[]; checks: string[] };
@@ -319,10 +320,19 @@ async function add() {
     }
   });
   for (const weekday of [2, 5]) {
-    scheduleValues.push({ propertyId: hotel.id, kind: "laundry", weekday, startTime: "08:00", endTime: "10:00", note: "Bags at the lobby by 8 AM, back the next day" });
+    scheduleValues.push({ propertyId: hotel.id, kind: "laundry", weekday, startTime: "08:00", endTime: "10:00", note: "Bring bags to the front desk by 8 AM; back the next day" });
   }
   const schedule = await db.insert(schema.weeklySchedule).values(scheduleValues).returning();
   ids.schedule.push(...schedule.map((s) => s.id));
+
+  // A laundry service with a price, so the desk can take bags in straight away.
+  if (!(await db.query.laundryServices.findFirst({ where: eq(schema.laundryServices.propertyId, hotel.id) }))) {
+    const [service] = await db
+      .insert(schema.laundryServices)
+      .values({ propertyId: hotel.id, name: "Wash, dry and fold", ratePerKilo: 60_00, costPerKilo: 40_00, minimumCharge: 180_00, turnaroundDays: 1 })
+      .returning();
+    ids.laundryServices = [service.id];
+  }
 
   // Requests in every state. Open problem reports and maintenance requests mark their rooms as needing work.
   const at = (daysAgo: number, hour: number) => new Date(`${addDaysISO(today, -daysAgo)}T${pad(hour)}:00+08:00`);
@@ -619,6 +629,13 @@ async function remove() {
   await db.transaction(async (tx) => {
     // Billing and inventory for the demo contract and demo people, including anything added while testing.
     const contracts = some(ids.contracts), people = some(ids.occupants);
+    // Laundry and repair costs from testing point at charges, so they go first (claims go with their loads).
+    await tx
+      .delete(schema.laundryLoads)
+      .where(or(inArray(schema.laundryLoads.occupantId, people), inArray(schema.laundryLoads.serviceId, some(ids.laundryServices))));
+    await tx.delete(schema.laundryServices).where(inArray(schema.laundryServices.id, some(ids.laundryServices)));
+    await tx.update(schema.tenantRequests).set({ chargeId: null })
+      .where(or(inArray(schema.tenantRequests.occupantId, people), inArray(schema.tenantRequests.id, some(ids.requests))));
     await tx.delete(schema.inventoryChecks).where(or(
       inArray(schema.inventoryChecks.id, some(ids.items?.checks)),
       inArray(schema.inventoryChecks.contractId, contracts),

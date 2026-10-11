@@ -92,7 +92,7 @@ test("tenant portal", async ({ browser }) => {
     await form.getByRole("button", { name: "Change" }).click();
     await expect(admin.getByText("75 rooms now allow 2 people.")).toBeVisible();
     await admin.goto("/");
-    await expect(admin.getByText(/150 physical beds/)).toBeVisible();
+    await expect(admin.getByText(/in 150 beds/)).toBeVisible();
   });
 
   const tenant = await signIn(browser, TENANT, { width: 390, height: 844 });
@@ -160,7 +160,7 @@ test("tenant portal", async ({ browser }) => {
 
   await test.step("staff see the waiting request and approve it", async () => {
     await admin.goto("/");
-    await expect(admin.getByText("1 new request")).toBeVisible();
+    await expect(admin.getByText("1 request needs a reply")).toBeVisible();
     await admin.goto("/requests");
     await expect(admin.getByText("Toilet flush is weak, please check.")).toBeVisible();
     await admin.getByText("Approve or decline").click();

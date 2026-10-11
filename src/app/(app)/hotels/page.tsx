@@ -58,7 +58,7 @@ export default async function HotelsPage() {
                 {h.id === current.id && <Badge tone="green">Looking at it now</Badge>}
               </div>
               <p className="mt-1 text-sm text-muted">
-                {n(rooms, h.id)} rooms, {n(living, h.id)} tenants, {n(staff, h.id)} staff
+                {n(rooms, h.id)} rooms, {n(living, h.id)} tenants, {n(staff, h.id)} staff working there
                 {h.address && `. ${h.address}`}
               </p>
               <div className="mt-3 flex flex-wrap items-start gap-3">

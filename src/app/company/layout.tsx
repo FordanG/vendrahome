@@ -40,9 +40,8 @@ export default async function CompanyLayout({ children }: LayoutProps<"/company"
                 {client.name}. {user.name}, {ROLE_LABELS[user.role]}
               </p>
             </div>
-            <p className="min-w-0 truncate text-xs text-sidebar-muted md:hidden">{client.name}</p>
-            <form action={logout}>
-              <button className="-mr-2 min-h-11 px-2 text-sm text-sidebar-muted underline-offset-2 hover:text-sidebar-foreground hover:underline md:min-h-0 md:text-xs">
+            <form action={logout} className="shrink-0">
+              <button className="-mr-2 min-h-11 whitespace-nowrap px-2 text-sm text-sidebar-muted underline-offset-2 hover:text-sidebar-foreground hover:underline md:min-h-0 md:text-xs">
                 Sign out
               </button>
             </form>

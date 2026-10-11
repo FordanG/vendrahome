@@ -4,7 +4,7 @@ import { getDb, schema } from "@/db";
 import { requireCompany } from "@/lib/auth";
 import { companyRequestScope, companyRooms } from "@/lib/company";
 import { formatDate, todayISO } from "@/lib/format";
-import { Badge, Card, Empty, PageHeader, SectionTitle } from "@/components/ui";
+import { Badge, Card, Empty, LinkButton, PageHeader, SectionTitle } from "@/components/ui";
 import { CONTRACT_STATUS_LABELS, CONTRACT_STATUS_TONES } from "../(app)/contracts/status";
 
 export default async function CompanyHome() {
@@ -40,7 +40,18 @@ export default async function CompanyHome() {
 
   return (
     <>
-      <PageHeader title={client.name} subtitle="Your rooms and people at the hotel." />
+      <PageHeader
+        title={client.name}
+        subtitle="Your rooms and people at the hotel."
+        actions={
+          <>
+            {client.selfManagePeople && <LinkButton href="/company/people/new">Add a person</LinkButton>}
+            <LinkButton variant="secondary" href="/company/people">
+              Ask for a room or move-out
+            </LinkButton>
+          </>
+        }
+      />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Living here now" value={living} />

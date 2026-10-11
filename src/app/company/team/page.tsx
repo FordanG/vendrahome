@@ -13,11 +13,11 @@ const ROLE_HELP = {
 
 function RoleSelect({ value }: { value?: Staff["role"] }) {
   return (
-    <Field label="Role">
+    <Field label="Role" hint={`${ROLE_LABELS.company_staff}: ${ROLE_HELP.company_staff}. ${ROLE_LABELS.company_admin}: ${ROLE_HELP.company_admin}.`}>
       <Select name="role" defaultValue={value ?? "company_staff"}>
         {(["company_staff", "company_admin"] as const).map((r) => (
           <option key={r} value={r}>
-            {ROLE_LABELS[r]}: {ROLE_HELP[r]}
+            {ROLE_LABELS[r]}
           </option>
         ))}
       </Select>

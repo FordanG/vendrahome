@@ -14,7 +14,7 @@ export default async function TemplatesPage() {
   const db = await getDb();
   const [types, templates] = await Promise.all([
     db
-      .select({ type: schema.roomTypes, rooms: sql<number>`(select count(*)::int from rooms r where r.room_type_id = ${schema.roomTypes.id})` })
+      .select({ type: schema.roomTypes, rooms: sql<number>`(select count(*)::int from rooms r where r.room_type_id = "room_types"."id")` })
       .from(schema.roomTypes)
       .orderBy(asc(schema.roomTypes.name)),
     db.select().from(schema.itemTemplates).orderBy(asc(schema.itemTemplates.position), asc(schema.itemTemplates.name)),

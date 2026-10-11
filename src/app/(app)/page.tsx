@@ -90,6 +90,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
   const people = all.reduce((n, r) => n + r.occupants.length, 0);
   const beds = all.reduce((n, r) => n + r.capacity, 0);
   const assignable = all.reduce((n, r) => n + r.assignableBeds, 0);
+  const booked = all.reduce((n, r) => n + r.upcoming.length, 0);
   const types = [...new Set(all.map((r) => r.typeName).filter(Boolean))];
 
   const endingContracts = !canSeeContracts ? [] : await db.select({
@@ -108,7 +109,11 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
     <>
       <PageHeader
         title="Room board"
-        subtitle={`${hotel.name}, ${formatDate(today)}. ${people} tenants, ${assignable} beds available under current contracts (${beds} physical beds).`}
+        subtitle={
+          canSeePeople
+            ? `${hotel.name}, ${formatDate(today)}. ${people} tenants in ${beds} beds; ${assignable} free to give out${booked ? `, ${booked} booked for move-ins` : ""}.`
+            : `${hotel.name}, ${formatDate(today)}. ${all.length} rooms.`
+        }
       />
 
       {hasNotices && (
@@ -116,7 +121,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
           {waiting > 0 && (
             <li className="border-l-4 border-l-brand px-4 py-3 sm:py-2.5">
               <Link className="font-medium underline underline-offset-2" href="/requests?view=pending">
-                {waiting} new request{waiting === 1 ? "" : "s"}
+                {waiting} {waiting === 1 ? "request needs" : "requests need"} a reply
               </Link>{" "}
               waiting to be handled.
             </li>

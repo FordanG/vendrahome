@@ -66,7 +66,7 @@ export default async function CheckPage({ params }: PageProps<"/inventory/checks
           </Detail>
           <Detail label="Signed off by">{check.signedBy}</Detail>
           <Detail label="Stay">{stay ? (showPeople ? stay.name : "A tenant's stay") + `, moved in ${formatDate(stay.checkIn)}` : null}</Detail>
-          <Detail label="Contract">{contract?.reference}</Detail>
+          {CAN.viewClients.includes(user.role) && <Detail label="Contract">{contract?.reference}</Detail>}
         </dl>
         {check.notes && <p className="mt-3 whitespace-pre-wrap text-sm">{check.notes}</p>}
       </Card>

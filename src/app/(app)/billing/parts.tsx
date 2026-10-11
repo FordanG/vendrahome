@@ -131,7 +131,7 @@ export function Ledger({
                 <span className="block text-xs text-muted">
                   {[
                     r.item.payment.reference && `Ref. ${r.item.payment.reference}`,
-                    r.item.payment.officialReceiptNo && `OR ${r.item.payment.officialReceiptNo}`,
+                    r.item.payment.officialReceiptNo && `Receipt ${r.item.payment.officialReceiptNo}`,
                     r.item.payment.notes,
                     showStatement && (r.item.statementNumber ? `Counted on statement ${r.item.statementNumber}` : "Counted on the next statement"),
                     r.item.reversed && "Reversed",

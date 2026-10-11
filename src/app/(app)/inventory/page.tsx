@@ -120,7 +120,7 @@ export default async function InventoryPage() {
                 const check = lastCheck.get(r.id);
                 return (
                   <Row key={r.id} href={`/inventory/rooms/${r.id}`} plate={<RoomPlate number={r.number} />} title={counts ? `${counts.total} items` : "No items yet"}
-                    badge={counts?.problems ? <Badge tone="amber">{counts.problems} need attention</Badge> : undefined}>
+                    badge={counts?.problems ? <Badge tone="amber">{counts.problems} {counts.problems === 1 ? "needs" : "need"} attention</Badge> : undefined}>
                     <RowLine>{check ? `${CHECK_KIND_LABELS[check.kind]}, ${formatDate(check.checkedOn)}` : "Never checked"}</RowLine>
                   </Row>
                 );

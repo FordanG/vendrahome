@@ -85,9 +85,13 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
           <Card>
             <SectionTitle>Right now</SectionTitle>
             <dl className="grid gap-4 sm:grid-cols-2">
-              <Detail label="Beds available to assign">{live.assignableBeds}</Detail>
+              {canSeePeople && (
+                <Detail label="Beds free to give out">
+                  {live.assignableBeds > 0 ? `${live.assignableBeds} of ${room.capacity}` : `None (${live.occupants.length} of ${room.capacity} taken${live.upcoming.length ? ", the rest booked" : ""})`}
+                </Detail>
+              )}
               <Detail label="Condition">{CONDITION_LABELS[room.condition]}</Detail>
-              <Detail label="Contract">
+              {CAN.viewClients.includes(user.role) && <Detail label="Contract">
                 {live.contract ? (
                   canSeePeople ? (
                     <Link className="underline" href={`/contracts/${live.contract.id}`}>
@@ -99,8 +103,8 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
                 ) : (
                   "Not leased to anyone"
                 )}
-              </Detail>
-              <Detail label="Contract ends">{live.contract ? formatDate(live.contract.endDate) : null}</Detail>
+              </Detail>}
+              {CAN.viewClients.includes(user.role) && <Detail label="Contract ends">{live.contract ? formatDate(live.contract.endDate) : null}</Detail>}
               {checklists.length > 0 && (
                 <Detail label="Maintenance checklists">
                   <ul className="space-y-2">
