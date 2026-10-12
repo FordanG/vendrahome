@@ -15,12 +15,13 @@ Netlify, where every request may run on a fresh machine.
 
 1. Create a project. Pick region **Southeast Asia (Singapore)**, the closest to the Philippines.
    Save the database password somewhere safe.
-2. Open **Connect** and copy the **Transaction pooler** connection string (port 6543).
-   Put the database password into it. This is `DATABASE_URL`.
+2. Open **Connect → Direct** and copy the **Session pooler** connection string (port 5432,
+   host `aws-0-…pooler.supabase.com`). Put the database password into it. This is `DATABASE_URL`.
+   Don't use the transaction pooler (port 6543): with this app's database driver, pages hang on it.
 3. On your computer, bring the empty database up to date and create the admin account:
 
    ```bash
-   DATABASE_URL='postgresql://postgres.xxxx:PASSWORD@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres' \
+   DATABASE_URL='postgresql://postgres.xxxx:PASSWORD@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres' \
    HOTEL_NAME='Your hotel name' ADMIN_PASSWORD='a long password' pnpm db:seed
    ```
 
@@ -45,9 +46,9 @@ That is expected; don't add policies.
 
    | Name | Value |
    |---|---|
-   | `DATABASE_URL` | the transaction pooler string from step 1 |
+   | `DATABASE_URL` | the session pooler string from step 1 |
    | `APP_URL` | the site's public address, for example `https://vendrahome.netlify.app` |
-   | `DATABASE_POOL_SIZE` | optional, default 5. Connections per app instance. |
+   | `DATABASE_POOL_SIZE` | optional, default 3. Connections per app instance; idle ones close after 20 seconds. |
 
 4. Deploy, open the address, sign in as `admin` and change the password under **My account**.
 
@@ -63,9 +64,14 @@ Set `APP_URL` **before** printing door codes. The QR codes point to that address
 
 ## Running locally against Supabase
 
+Keep the connection string in `.env.production.local` (git ignores it). Next.js reads that
+file only for `pnpm build` and `pnpm start`, so `pnpm dev` and the tests keep using the
+local database. For scripts, pass the file explicitly:
+
 ```bash
-DATABASE_URL='...' pnpm db:migrate   # after pulling new code with a schema change
-DATABASE_URL='...' pnpm dev
+node --env-file=.env.production.local --import tsx scripts/migrate.ts   # after a schema change
+node --env-file=.env.production.local --import tsx scripts/seed.ts
+pnpm build && pnpm start                                                # the app on Supabase
 ```
 
 The local database migrates itself when the app starts. A hosted one only migrates

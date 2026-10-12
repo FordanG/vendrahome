@@ -19,7 +19,8 @@ export default defineConfig({
   },
   webServer: {
     command: `node --import tsx e2e/setup-db.ts && next dev -p ${E2E_PORT}`,
-    env: { PGLITE_DIR: E2E_DB, NEXT_DIST_DIR: ".next/e2e" },
+    // DATABASE_URL blank: tests never touch a hosted database, even if one is set in .env files.
+    env: { PGLITE_DIR: E2E_DB, NEXT_DIST_DIR: ".next/e2e", DATABASE_URL: "" },
     url: `http://localhost:${E2E_PORT}/login`,
     reuseExistingServer: false,
     timeout: 180_000,
