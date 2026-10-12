@@ -1,23 +1,15 @@
 // Creates the first admin account and the 75 rooms.
 // Usage: pnpm db:seed   (safe to re-run; it skips what already exists)
-import path from "node:path";
-import { mkdirSync } from "node:fs";
 import { randomBytes } from "node:crypto";
-import { PGlite } from "@electric-sql/pglite";
-import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
 import bcrypt from "bcryptjs";
 import * as schema from "../src/db/schema";
+import { connect } from "../src/db/connect";
 
 const FLOORS = 5;
 const ROOMS_PER_FLOOR = 15;
 
 async function main() {
-  const dataDir = process.env.PGLITE_DIR ?? path.join(process.cwd(), ".data", "pglite");
-  mkdirSync(path.dirname(dataDir), { recursive: true });
-  const client = await PGlite.create(dataDir);
-  const db = drizzle(client, { schema });
-  await migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+  const { db, close } = await connect({ migrate: true });
 
   const existingAdmin = await db.query.staff.findFirst();
   if (!existingAdmin) {
@@ -67,7 +59,7 @@ async function main() {
     console.log(`${roomCount} rooms already exist; skipped rooms.`);
   }
 
-  await client.close();
+  await close();
 }
 
 main().catch((err) => {

@@ -9,13 +9,11 @@
 // The IDs of every row it adds, and the room settings it changes, are saved
 // next to the database (<PGLITE_DIR>-demo.json), so removal only undoes the demo.
 import path from "node:path";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { PGlite } from "@electric-sql/pglite";
-import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { and, asc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import * as schema from "../src/db/schema";
+import { connect, pgliteDir, usesHostedDb, type DB } from "../src/db/connect";
 import { PROPERTY_RULES } from "../src/lib/property-rules";
 import { addDaysISO, addMonthsISO, formatDate, todayISO } from "../src/lib/format";
 
@@ -63,11 +61,11 @@ type DemoIds = {
 };
 
 async function open() {
-  const dataDir = process.env.PGLITE_DIR ?? path.join(process.cwd(), ".data", "pglite");
-  const client = await PGlite.create(dataDir);
-  const db = drizzle(client, { schema });
-  await migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
-  return { client, db, idsFile: `${dataDir}-demo.json` };
+  const { db, close } = await connect({ migrate: true });
+  // Remembers what the demo added, so it can be taken out again. Kept on this machine.
+  const idsFile = usesHostedDb() ? path.join(process.cwd(), ".data", "hosted-demo.json") : `${pgliteDir()}-demo.json`;
+  mkdirSync(path.dirname(idsFile), { recursive: true });
+  return { client: { close }, db, idsFile };
 }
 
 async function add() {
@@ -424,7 +422,6 @@ Also: two issued statements (the second partly unpaid and overdue), utility bill
 Remove it all later with: pnpm db:demo:remove`);
 }
 
-type DB = Awaited<ReturnType<typeof open>>["db"];
 
 // Standard room contents. Prices are replacement costs in centavos.
 const ITEM_LIST: { name: string; category: "furniture" | "appliance" | "fixture" | "issued"; perBed?: boolean; quantity?: number; cost: number; service?: number; loftOnly?: boolean }[] = [

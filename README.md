@@ -12,7 +12,7 @@ pnpm dev          # http://localhost:3000
 
 `db:seed` prints the admin password. Set your own with `ADMIN_PASSWORD=... pnpm db:seed` on the first run, or change it under **My account** after signing in.
 
-The database is an embedded Postgres (PGlite) stored in `.data/pglite`. Back up that folder to keep your data. Set `PGLITE_DIR` to put it somewhere else.
+Locally, the database is an embedded Postgres (PGlite) stored in `.data/pglite`. Back up that folder to keep your data. Set `PGLITE_DIR` to put it somewhere else. Set `DATABASE_URL` to use a hosted Postgres (Supabase) instead; see [docs/hosting.md](docs/hosting.md).
 
 ## Scripts
 
@@ -23,10 +23,11 @@ The database is an embedded Postgres (PGlite) stored in `.data/pglite`. Back up 
 | `pnpm db:demo` | Add demo data to try the app (see **Test data and accounts** below). Stop `pnpm dev` first. |
 | `pnpm db:demo:remove` | Delete everything `db:demo` added, and anything the demo people did while testing |
 | `pnpm db:generate` | Create a migration after changing `src/db/schema.ts` |
+| `pnpm db:migrate` | Bring the database up to date. Needed for a hosted database (run on each deploy); the local one does it when the app starts |
 | `pnpm typecheck` / `pnpm lint` | Checks |
 | `pnpm test:e2e` | End-to-end browser test (see below) |
 
-Migrations in `drizzle/` run automatically when the app starts.
+Migrations in `drizzle/` run automatically when the app starts on the local database.
 
 ## Test data and accounts
 
@@ -67,7 +68,7 @@ It starts its own server on port 3456 with a fresh database in `.data/e2e` and b
 
 ## Layout
 
-- `src/db/schema.ts` — all tables. Money is stored in centavos.
+- `src/db/schema.ts` — all tables. Money is stored in centavos. `src/db/connect.ts` opens the local or hosted database.
 - `src/lib/` — billing balances, statements and overdue (`billing.ts`), room inventory and check comparisons (`inventory.ts`), private photo storage (`photos.ts`), auth and roles (`auth.ts`), rent schedule math (`rent.ts`), room status (`rooms.ts`), room availability checks (`assignments.ts`), occupant fields (`occupants.ts`), CSV import helpers (`csv.ts`).
 - `src/app/(app)/` — signed-in pages. Each area has an `actions.ts` with its server actions; every action checks the staff role.
 - `src/app/me/` — the tenant portal. Tenant pages call `requireTenant()`; staff pages call `requireStaff()`, which sends tenants back to `/me`.
@@ -98,7 +99,7 @@ It starts its own server on port 3456 with a fresh database in `.data/e2e` and b
 - Several hotels (`/hotels`, see `docs/hotels.md`): the owner adds hotels (optionally with their rooms numbered by floor) and switches between them; each hotel has its own rooms, staff, contracts, billing, laundry, house rules and timetable. Staff of one hotel never see another. Companies, room types and checklists are shared.
 - Company accounts (`/company`, see `docs/company-accounts.md`): each company that leases rooms gets its own logins. Company admins and staff see only their company: its rooms and who lives there, its people (add and edit them, give them tenant logins), requests from its people and rooms, and, for company admins, its bills and its team's logins. They ask for move-ins and move-outs, which the front desk confirms on Room assignments. The hotel admin sets each company's agreement on its page: whether it keeps its people's details, whether its tenants' requests need its OK first, and whether its admins see bills.
 
-Not yet: hosting, backups and the public address (`APP_URL`). After the first version: reminders, taxes, monthly reports and supplies. Moving to Supabase for shared hosting.
+Ready for hosting on Supabase and Netlify ([docs/hosting.md](docs/hosting.md)); not yet set up: the hosted database, backups and the public address (`APP_URL`). After the first version: reminders, taxes, monthly reports and supplies.
 
 
 ## Account profiles

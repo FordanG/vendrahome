@@ -61,6 +61,6 @@ the hotel *does it*:
 
 ## Out of scope for now
 
-- Separate hotels or properties (true multi-property). The model is still one hotel.
+- (Several hotels came later; see [hotels.md](hotels.md).)
 - Companies changing contract terms or rates. Contracts stay hotel-admin only.
 - Company-side payments. Payments are still recorded by the hotel.

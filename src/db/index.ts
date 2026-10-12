@@ -1,30 +1,18 @@
 import "server-only";
-import path from "node:path";
-import { mkdirSync } from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { sql } from "drizzle-orm";
-import { PGlite } from "@electric-sql/pglite";
-import { drizzle, type PgliteDatabase } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
+import { connect, usesHostedDb, type DB } from "./connect";
 import * as schema from "./schema";
 
-// Local development runs an embedded Postgres (PGlite) in this process.
-// Moving to Supabase means swapping this file for a postgres-js client;
-// the schema and queries stay the same.
-
-type DB = PgliteDatabase<typeof schema>;
 type Store = Pick<DB, "query" | "select" | "insert" | "update" | "delete" | "execute">;
 const transactionStore = new AsyncLocalStorage<Store>();
 
 const globalForDb = globalThis as unknown as { dbPromise?: Promise<DB> };
 
+// The local database migrates itself on start. A hosted one is migrated once per deploy
+// with `pnpm db:migrate`, so many app instances never race to migrate it.
 async function open(): Promise<DB> {
-  const dataDir = process.env.PGLITE_DIR ?? path.join(process.cwd(), ".data", "pglite");
-  mkdirSync(path.dirname(dataDir), { recursive: true });
-  const client = await PGlite.create(dataDir);
-  const db = drizzle(client, { schema });
-  await migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
-  return db;
+  return (await connect({ migrate: !usesHostedDb() })).db;
 }
 
 function rootDb(): Promise<DB> {
