@@ -2,10 +2,11 @@
 // Exercise real server actions and PGlite transactions; stub only request auth/navigation.
 const { test, before } = require('node:test');
 const assert = require('node:assert/strict');
-const { mkdtempSync } = require('node:fs');
+const { mkdtempSync, rmSync } = require('node:fs');
 const Module = require('node:module');
 const { AsyncLocalStorage } = require('node:async_hooks');
 process.env.PGLITE_DIR = mkdtempSync('/private/tmp/vendra-tests-');
+process.on('exit', () => rmSync(process.env.PGLITE_DIR, { recursive: true, force: true })); // don't leave a database per run behind
 const actors = new AsyncLocalStorage();
 const cookieJar = new Map();
 const originalLoad = Module._load;

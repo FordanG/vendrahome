@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Node CLI integration test. */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { mkdtempSync } = require('node:fs');
+const { mkdtempSync, rmSync } = require('node:fs');
 const { execFileSync } = require('node:child_process');
 const { join } = require('node:path');
 const { PGlite } = require('@electric-sql/pglite');
 test('offline backup restores into a new directory and refuses overwrites', async () => {
   const dir = mkdtempSync('/private/tmp/vendra-backup-test-');
+  process.on('exit', () => rmSync(dir, { recursive: true, force: true }));
   const source=join(dir,'source'), archive=join(dir,'backup.tar.gz'), target=join(dir,'restored');
   const db=await PGlite.create(source);
   await db.exec('CREATE TABLE rooms (id int); CREATE TABLE occupants (id int); CREATE TABLE room_assignments (id int); INSERT INTO rooms VALUES (101); INSERT INTO occupants VALUES (1), (2);');

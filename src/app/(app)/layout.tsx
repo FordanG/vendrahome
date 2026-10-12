@@ -35,6 +35,7 @@ const NAV: { label: string; items: NavItem[] }[] = [
   {
     label: "Leasing",
     items: [
+      { href: "/availability", label: "Availability", roles: ["admin", "front_desk"] },
       { href: "/contracts", label: "Contracts", roles: ["admin", "front_desk"] },
       { href: "/clients", label: "Companies", roles: ["admin", "front_desk"] },
     ],

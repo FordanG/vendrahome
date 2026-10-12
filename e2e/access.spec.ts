@@ -27,6 +27,7 @@ const PAGES: [string, Record<Role, string>][] = [
   ["/occupants/new", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me", company: "/company" }],
   ["/assignments", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me", company: "/company" }],
   ["/assignments/import", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me", company: "/company" }],
+  ["/availability", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me", company: "/company" }],
   ["/contracts", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me", company: "/company" }],
   ["/contracts/new", { admin: "open", desk: HIDDEN, fix: HIDDEN, tenant: "/me", company: "/company" }],
   ["/clients", { admin: "open", desk: "open", fix: HIDDEN, tenant: "/me", company: "/company" }],

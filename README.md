@@ -79,6 +79,7 @@ It starts its own server on port 3456 with a fresh database in `.data/e2e` and b
 
 - Sign-in with roles: admin, front desk & housekeeping, maintenance, tenant, company admin, company staff
 - Room board with derived status (occupied, contracted-empty, vacant, needs work, not available)
+- Availability (`/availability`, admin and front desk): when each room frees up. Beds free now and within 30 days inside leases, whole rooms free to lease now and within 90 days, tenants' move-out dates and lease end dates, and a date picker for "what's free on 1 December". A tenant with no move-out date counts as staying until their lease ends.
 - Rooms and room types, capacity and condition
 - Clients and contracts: rooms covered, one total rent or per-room rates, any number of rent increases, rent schedule, overlap checks
 - Occupants with full details, room assignments with bed/slot, transfers, check-outs and history

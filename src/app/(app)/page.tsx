@@ -8,7 +8,7 @@ import { getRoomBoard, STATUS_LABELS, type RoomStatus } from "@/lib/rooms";
 import { STATUS_HELP } from "@/lib/room-status";
 import { addDaysISO, daysBetween, formatDate, todayISO } from "@/lib/format";
 import { SLOT, SWATCH } from "@/components/list";
-import { PageHeader } from "@/components/ui";
+import { LinkButton, PageHeader } from "@/components/ui";
 import { FloorFolds } from "./floor-folds";
 
 // The board reads like a front desk key rack: one fold per floor, one slot per room.
@@ -113,6 +113,13 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
           canSeePeople
             ? `${hotel.name}, ${formatDate(today)}. ${people} tenants in ${beds} beds; ${assignable} free to give out${booked ? `, ${booked} booked for move-ins` : ""}.`
             : `${hotel.name}, ${formatDate(today)}. ${all.length} rooms.`
+        }
+        actions={
+          canSeeContracts && (
+            <LinkButton variant="secondary" href="/availability">
+              When rooms free up
+            </LinkButton>
+          )
         }
       />
 
