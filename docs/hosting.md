@@ -54,6 +54,15 @@ That is expected; don't add policies.
 
 Set `APP_URL` **before** printing door codes. The QR codes point to that address.
 
+## Or: Vercel instead of Netlify
+
+`vercel.json` already sets the build command and runs the app in Singapore (`sin1`), next
+to the database; left at Vercel's default US region, every query crosses the Pacific and
+pages get slow. Import `FordanG/vendrahome` in Vercel, then add the same `DATABASE_URL`
+and `APP_URL` (for example `https://vendrahome.vercel.app`) under Environment Variables.
+Vercel's free Hobby plan is for non-commercial use; a business running on it day to day
+needs Pro.
+
 ## 3. Backups
 
 - Supabase Pro keeps daily backups for 7 days (**Database → Backups**). Turn on
