@@ -1,0 +1,12 @@
+# Only the code goes up to Vercel. Never local data, secrets or build leftovers.
+.env*
+.data
+.next
+node_modules
+test-results
+playwright-report
+tests
+e2e
+*.mts
+.vercel
+.DS_Store
