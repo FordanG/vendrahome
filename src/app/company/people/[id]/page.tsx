@@ -32,6 +32,10 @@ export default async function CompanyPersonPage({ params }: PageProps<"/company/
   const stayRoom = stay ? await db.query.rooms.findFirst({ where: eq(schema.rooms.id, stay.roomId) }) : null;
   const pending = asks.find((a) => a.s.status === "pending");
   const canEdit = client.selfManagePeople;
+  const openRooms = rooms.filter((r) => r.free > 0);
+  const fullRooms = rooms.filter((r) => r.free === 0);
+  // The hotel's name only helps when the company leases in more than one.
+  const manyHotels = new Set(rooms.map((r) => r.hotel)).size > 1;
 
   return (
     <>
@@ -94,12 +98,24 @@ export default async function CompanyPersonPage({ params }: PageProps<"/company/
                   <ActionForm action={askMoveIn.bind(null, person.id)} submitLabel="Send to the front desk" pendingLabel="Sending…" className="space-y-3">
                     <Field label="Room">
                       <Select name="roomId" required defaultValue="">
-                        <option value="">Pick a room</option>
-                        {rooms.map(({ room, hotel, free }) => (
-                          <option key={room.id} value={room.id} disabled={free === 0}>
-                            {hotel}, room {room.number}, floor {room.floor} ({free > 0 ? `${free} ${free === 1 ? "bed" : "beds"} free` : "full"})
-                          </option>
-                        ))}
+                        <option value="">Pick a room ({openRooms.length} with a free bed)</option>
+                        {/* Rooms with a free bed first; full ones after, greyed out, so the list stays honest but short to scan. */}
+                        <optgroup label="Free beds">
+                          {openRooms.map(({ room, hotel, free }) => (
+                            <option key={room.id} value={room.id}>
+                              {manyHotels ? `${hotel}, room` : "Room"} {room.number}, floor {room.floor}, {free} {free === 1 ? "bed" : "beds"} free
+                            </option>
+                          ))}
+                        </optgroup>
+                        {fullRooms.length > 0 && (
+                          <optgroup label="Full">
+                            {fullRooms.map(({ room, hotel }) => (
+                              <option key={room.id} value={room.id} disabled>
+                                {manyHotels ? `${hotel}, room` : "Room"} {room.number}, full
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </Select>
                     </Field>
                     <Field label="Bed" hint="Optional, e.g. Bed A">

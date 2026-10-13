@@ -54,6 +54,14 @@ test("company account: logins, people and moves", async ({ browser }) => {
     await hr.getByLabel("Position").fill("Night shift agent");
     await hr.getByRole("button", { name: "Add person" }).click();
     await hr.waitForURL(/\/company\/people\/[0-9a-f-]{36}$/);
+    const added = hr.url();
+    // Still waiting for a room, they stay on the default People list.
+    await hr.goto("/company/people");
+    await expect(hr.getByRole("link", { name: new RegExp(NEW_PERSON) })).toContainText("No room yet");
+    await hr.goto(added);
+    // Rooms with a free bed come first; full rooms follow and can't be picked.
+    const options = await hr.locator("select[name=roomId] option:not([value=''])").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).disabled));
+    expect(options.indexOf(true) === -1 || options.slice(options.indexOf(true)).every(Boolean)).toBe(true);
     const room = await hr.locator("select[name=roomId] option", { hasText: `Room ${ROOM},` }).getAttribute("value");
     await hr.locator("select[name=roomId]").selectOption(room!);
     await hr.locator("input[name=note]").fill("Arrives after 6 PM");

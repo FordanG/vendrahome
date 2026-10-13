@@ -13,7 +13,7 @@ export default async function CompanyPeoplePage({ searchParams }: PageProps<"/co
   const show = sp.show === "all" ? "all" : "here";
   const today = todayISO();
   const db = await getDb();
-  const [people, stays, asks, logins] = await Promise.all([
+  const [people, stays, asks, logins, everStayed] = await Promise.all([
     db.select().from(schema.occupants).where(eq(schema.occupants.clientId, client.id)).orderBy(asc(schema.occupants.fullName)),
     db
       .select({ occupantId: schema.roomAssignments.occupantId, checkIn: schema.roomAssignments.checkIn, slot: schema.roomAssignments.slot, number: schema.rooms.number })
@@ -27,11 +27,19 @@ export default async function CompanyPeoplePage({ searchParams }: PageProps<"/co
       .from(schema.staff)
       .innerJoin(schema.occupants, eq(schema.staff.occupantId, schema.occupants.id))
       .where(and(eq(schema.occupants.clientId, client.id), eq(schema.staff.active, true))),
+    db
+      .select({ occupantId: schema.roomAssignments.occupantId })
+      .from(schema.roomAssignments)
+      .innerJoin(schema.occupants, eq(schema.roomAssignments.occupantId, schema.occupants.id))
+      .where(eq(schema.occupants.clientId, client.id)),
   ]);
   const stayOf = new Map(stays.map((s) => [s.occupantId, s]));
   const askOf = new Map(asks.map((a) => [a.occupantId, a]));
   const hasLogin = new Set(logins.map((l) => l.occupantId));
-  const here = people.filter((p) => stayOf.has(p.id) || askOf.has(p.id));
+  // Current: living here, moving in or out, or added and still waiting for a room. Only people who
+  // have moved out drop to "Everyone".
+  const hadRoom = new Set(everStayed.map((e) => e.occupantId));
+  const here = people.filter((p) => stayOf.has(p.id) || askOf.has(p.id) || !hadRoom.has(p.id));
   const list = (show === "all" ? people : here).filter(
     (p) => !q || p.fullName.toLowerCase().includes(q) || p.employeeId?.toLowerCase().includes(q) || stayOf.get(p.id)?.number.toLowerCase() === q,
   );
@@ -46,7 +54,7 @@ export default async function CompanyPeoplePage({ searchParams }: PageProps<"/co
       <div className="mb-4 space-y-3 sm:flex sm:flex-wrap sm:items-center sm:gap-3 sm:space-y-0">
         <ViewTabs
           items={[
-            { href: "/company/people", label: "Here or moving", count: here.length, active: show === "here" },
+            { href: "/company/people", label: "Current", count: here.length, active: show === "here" },
             { href: "/company/people?show=all", label: "Everyone", count: people.length, active: show === "all" },
           ]}
         />
@@ -80,7 +88,9 @@ export default async function CompanyPeoplePage({ searchParams }: PageProps<"/co
                     ? stay.checkIn > today
                       ? `Room ${stay.number}, moving in ${formatDate(stay.checkIn)}`
                       : `Room ${stay.number}${stay.slot ? `, ${stay.slot}` : ""}`
-                    : "No room"}
+                    : hadRoom.has(p.id)
+                      ? "Moved out"
+                      : "No room yet. Open to ask for one"}
                   {p.position && `. ${p.position}`}
                 </RowLine>
                 <RowLine>{hasLogin.has(p.id) ? "Can sign in" : "No login yet"}</RowLine>
