@@ -5,6 +5,7 @@ import { getAvailability, roomOn, type AvailRoom } from "@/lib/availability";
 import { addDaysISO, daysBetween, formatDate, isISODate, todayISO } from "@/lib/format";
 import { AutoSubmitInput, AutoSubmitSelect } from "@/components/auto-submit";
 import { Button, Empty, Input, PageHeader } from "@/components/ui";
+import { FilterToggle } from "./filter-toggle";
 
 // Management's question: which rooms can we offer, and when does each one free up?
 // Two kinds of answer: beds inside a company's lease (for its people), and whole rooms
@@ -60,7 +61,7 @@ function Headline({ r, view, today }: { r: AvailRoom; view: View; today: string 
       <span className="text-emerald-700 dark:text-emerald-400">Free to lease now</span>
     ) : (
       <span>
-        Free to lease {formatDate(r.freeFrom)} <span className="font-normal text-muted">· {inDays(today, r.freeFrom)}</span>
+        Free to lease {formatDate(r.freeFrom)}<span className="font-normal text-muted">, {inDays(today, r.freeFrom)}</span>
       </span>
     );
   const bedLine =
@@ -68,7 +69,7 @@ function Headline({ r, view, today }: { r: AvailRoom; view: View; today: string 
       <span className="text-emerald-700 dark:text-emerald-400">{beds(r.bedsFree)} free now</span>
     ) : bed ? (
       <span>
-        Bed free {formatDate(bed)} <span className="font-normal text-muted">· {inDays(today, bed)}</span>
+        Bed free {formatDate(bed)}<span className="font-normal text-muted">, {inDays(today, bed)}</span>
       </span>
     ) : (
       <span>Full until the lease ends</span>
@@ -102,7 +103,7 @@ function OnDate({ r, on }: { r: AvailRoom; on: string }) {
   );
 }
 
-function RoomRow({ r, view, on, today, q }: { r: AvailRoom; view: View; on: string | null; today: string; q: string }) {
+function RoomRow({ r, view, on, today, q, sharedLease, oneCompany }: { r: AvailRoom; view: View; on: string | null; today: string; q: string; sharedLease: boolean; oneCompany: boolean }) {
   // A search that found this room by a tenant's name opens the tenant list, so the name shows.
   const openTenants = !!q && [...r.tenants, ...r.booked].some((t) => t.fullName.toLowerCase().includes(q));
   const then = on ? roomOn(r, on, today) : null;
@@ -112,32 +113,35 @@ function RoomRow({ r, view, on, today, q }: { r: AvailRoom; view: View; on: stri
   const people = r.tenants.length + r.booked.length;
   return (
     <li className="px-4 py-3 sm:grid sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] sm:gap-6">
-      <div className="flex min-w-0 gap-3">
-        <Link
-          href={`/rooms/${r.id}`}
-          className={`plate flex h-12 w-14 shrink-0 items-center justify-center border text-lg font-bold ${plateFor(key, today, r.condition === "not_available")}`}
-          aria-label={`Room ${r.number}`}
-        >
+      <Link href={`/rooms/${r.id}`} className="flex min-h-12 min-w-0 gap-3">
+        <span className={`plate flex h-12 w-14 shrink-0 items-center justify-center border text-lg font-bold ${plateFor(key, today, r.condition === "not_available")}`}>
+          <span className="sr-only">Room </span>
           {r.number}
-        </Link>
-        <div className="min-w-0 flex-1">
+        </span>
+        <span className="min-w-0 flex-1">
           {on ? <OnDate r={r} on={on} /> : <Headline r={r} view={view} today={today} />}
           <span className="mt-0.5 block text-sm text-muted">
             {[`Floor ${r.floor}`, r.typeName, `${r.tenants.length} of ${beds(r.capacity)} taken${on ? " now" : ""}`, r.booked.length > 0 && `${r.booked.length} booked`]
               .filter(Boolean)
-              .join(" · ")}
+              .join(", ")}
           </span>
           {r.condition === "needs_work" && <span className="block text-sm text-warn-foreground">Needs attention before anyone moves in</span>}
           {r.freeUntil && <span className="block text-sm text-muted">Free until {formatDate(r.freeUntil)}, then taken again</span>}
-        </div>
-      </div>
-      <div className="mt-2 min-w-0 space-y-1 pl-[4.25rem] text-sm sm:mt-0 sm:pl-0">
-        {r.lease ? (
+        </span>
+      </Link>
+      <div className="mt-1 min-w-0 space-y-1 pl-[4.25rem] text-sm empty:hidden sm:mt-0 sm:pl-0">
+        {sharedLease ? null : r.lease ? (
           <span className="block">
-            <Link className="underline-offset-2 hover:underline" href={`/contracts/${r.lease.id}`}>
-              {r.lease.clientName}
-            </Link>
-            <span className="text-muted"> · lease ends {formatDate(r.lease.endDate)}</span>
+            {oneCompany ? (
+              <span className="text-muted">Lease ends {formatDate(r.lease.endDate)}</span>
+            ) : (
+              <>
+                <Link className="underline-offset-2 hover:underline" href={`/contracts/${r.lease.id}`}>
+                  {r.lease.clientName}
+                </Link>
+                <span className="text-muted">, lease ends {formatDate(r.lease.endDate)}</span>
+              </>
+            )}
           </span>
         ) : (
           <span className="block text-muted">Not leased</span>
@@ -149,12 +153,12 @@ function RoomRow({ r, view, on, today, q }: { r: AvailRoom; view: View; on: stri
         )}
         {people > 0 && (
           <details className="group" open={openTenants}>
-            <summary className="block min-h-9 cursor-pointer list-none py-1 text-muted hover:text-foreground sm:min-h-0 sm:py-0 [&::-webkit-details-marker]:hidden">
+            <summary className="-my-1 block min-h-11 cursor-pointer list-none py-2.5 text-muted hover:text-foreground sm:my-0 sm:min-h-0 sm:py-0 [&::-webkit-details-marker]:hidden">
               <span aria-hidden className="mr-1.5 inline-block transition-transform group-open:rotate-90">›</span>
               {r.tenants.length > 0 && `${r.tenants.length} ${r.tenants.length === 1 ? "tenant" : "tenants"}`}
               {r.tenants.length > 0 && r.booked.length > 0 && ", "}
               {r.booked.length > 0 && `${r.booked.length} moving in`}
-              {leaving?.expectedCheckOut && <span> · next move-out {formatDate(leaving.expectedCheckOut)}</span>}
+              {leaving?.expectedCheckOut && <span>, next move-out {formatDate(leaving.expectedCheckOut)}</span>}
             </summary>
             <ul className="mt-1 space-y-1 border-l-2 border-border pl-3">
               {r.tenants.map((t) => (
@@ -250,14 +254,14 @@ export default async function AvailabilityPage({ searchParams }: PageProps<"/ava
   const bedsNow = pool.reduce((n, r) => n + bedsFreeFor(r), 0);
   const tiles: { view: View; count: number; label: string; hint: string }[] = onDay
     ? [
-        { view: "beds", count: pool.reduce((n, r) => n + bedsFreeFor(r), 0), label: `Beds free on ${formatDate(on)}`, hint: "Inside leases" },
-        { view: "lease", count: pool.filter(filters.lease).length, label: "Rooms to lease", hint: `Free on ${formatDate(on)}` },
+        { view: "beds", count: pool.reduce((n, r) => n + bedsFreeFor(r), 0), label: "Beds free", hint: `on ${formatDate(on)}` },
+        { view: "lease", count: pool.filter(filters.lease).length, label: "Rooms to lease", hint: `on ${formatDate(on)}` },
       ]
     : [
-        { view: "beds", count: bedsNow, label: "Beds free now", hint: `In ${pool.filter(filters.beds).length} rooms` },
-        { view: "beds30", count: pool.filter(filters.beds30).length, label: "Rooms with a bed", hint: "Free within 30 days" },
-        { view: "lease", count: pool.filter(filters.lease).length, label: "Rooms to lease now", hint: "Whole room" },
-        { view: "lease90", count: pool.filter(filters.lease90).length, label: "Rooms to lease", hint: "Free within 90 days" },
+        { view: "beds", count: bedsNow, label: "Beds free now", hint: `in ${pool.filter(filters.beds).length} ${pool.filter(filters.beds).length === 1 ? "room" : "rooms"}` },
+        { view: "beds30", count: pool.filter(filters.beds30).length, label: "Rooms with a bed", hint: "within 30 days" },
+        { view: "lease", count: pool.filter(filters.lease).length, label: "Rooms to lease", hint: "free now" },
+        { view: "lease90", count: pool.filter(filters.lease90).length, label: "Rooms to lease", hint: "within 90 days" },
       ];
   const filtered = !!(q || floor || type || need);
 
@@ -277,59 +281,85 @@ export default async function AvailabilityPage({ searchParams }: PageProps<"/ava
         { label: "Not known or out of service", rooms: shown.filter((r) => !keyFor(r, active, today)) },
       ].filter((g) => g.rooms.length > 0);
 
+  // Said once above the list instead of on every row: one lease covering every room, or one company.
+  const leaseIds = new Set(pool.map((r) => r.lease?.id ?? ""));
+  const sharedLease = leaseIds.size === 1 && !leaseIds.has("") && !pool.some((r) => r.nextLease) ? pool[0].lease : null;
+  const oneCompany = new Set(pool.flatMap((r) => [r.lease?.clientName, r.nextLease?.clientName]).filter(Boolean)).size <= 1;
+  const activeFilters = [floor, type, need, on].filter(Boolean).length;
+  const clearHref = active === "all" ? "/availability" : `/availability?view=${active}`;
+
+  // The same fields serve both layouts: folded behind "Filters" on phones, in one row on wider screens.
+  const fields = (
+    <>
+      <AutoSubmitSelect name="floor" defaultValue={floor} aria-label="Floor" className="min-w-0 sm:w-36">
+        <option value="">All floors</option>
+        {floors.map((f) => (
+          <option key={f} value={f}>
+            Floor {f}
+          </option>
+        ))}
+      </AutoSubmitSelect>
+      {types.length > 1 && (
+        <AutoSubmitSelect name="type" defaultValue={type} aria-label="Room type" className="min-w-0 sm:w-40">
+          <option value="">All room types</option>
+          {types.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </AutoSubmitSelect>
+      )}
+      <AutoSubmitSelect name="need" defaultValue={need ? String(need) : ""} aria-label="Beds needed" className="min-w-0 sm:w-52">
+        <option value="">Any number of beds</option>
+        {Array.from({ length: maxBeds }, (_, i) => i + 1).map((n) => (
+          <option key={n} value={n}>
+            {n === 1 ? "1 bed or more" : `${n} beds or more`}
+          </option>
+        ))}
+      </AutoSubmitSelect>
+      <label className="flex items-center gap-2 text-sm">
+        <span className="shrink-0 text-muted">Free on</span>
+        <AutoSubmitInput name="on" type="date" min={addDaysISO(today, 1)} defaultValue={on ?? ""} aria-label="Free on a later date" className="min-w-0 flex-1 sm:w-44 sm:flex-none" />
+      </label>
+    </>
+  );
+  const search = (
+    <>
+      {active !== "all" && <input type="hidden" name="view" value={active} />}
+      <Input name="q" type="search" enterKeyHint="search" defaultValue={text("q")} placeholder="Room, tenant or company" aria-label="Search rooms" className="min-w-0 flex-1 sm:max-w-sm" />
+    </>
+  );
+
   return (
     <>
-      <PageHeader title="Availability" subtitle={`${hotel.name}, ${formatDate(today)}. When each room and bed frees up.`} />
+      <PageHeader title="Availability" subtitle={`${hotel.name}, ${formatDate(today)}`} />
 
-      <form className="mb-4 space-y-2" role="search" aria-label="Find rooms">
-        {active !== "all" && <input type="hidden" name="view" value={active} />}
-        <div className="flex gap-2">
-          <Input name="q" type="search" defaultValue={text("q")} placeholder="Room, tenant or company" aria-label="Search" className="min-w-0 flex-1 sm:max-w-sm" />
-          <Button variant="secondary">Search</Button>
-        </div>
-        <div className={`grid gap-2 sm:flex sm:flex-wrap ${types.length > 1 ? "grid-cols-3" : "grid-cols-2"}`}>
-          <AutoSubmitSelect name="floor" defaultValue={floor} aria-label="Floor" className="min-w-0 sm:w-36">
-            <option value="">All floors</option>
-            {floors.map((f) => (
-              <option key={f} value={f}>
-                Floor {f}
-              </option>
-            ))}
-          </AutoSubmitSelect>
-          {types.length > 1 ? (
-            <AutoSubmitSelect name="type" defaultValue={type} aria-label="Room type" className="min-w-0 sm:w-40">
-              <option value="">All types</option>
-              {types.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </AutoSubmitSelect>
-          ) : null}
-          <AutoSubmitSelect name="need" defaultValue={need ? String(need) : ""} aria-label="Beds needed" className="min-w-0 sm:w-36">
-            <option value="">Beds</option>
-            {Array.from({ length: maxBeds }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>
-                {n === 1 ? "1+ bed" : `${n}+ beds`}
-              </option>
-            ))}
-          </AutoSubmitSelect>
-          <label className={`flex items-center gap-2 text-sm ${types.length > 1 ? "col-span-3" : "col-span-2"} sm:col-span-1`}>
-            <span className="shrink-0 text-muted">Free on</span>
-            <AutoSubmitInput name="on" type="date" min={addDaysISO(today, 1)} defaultValue={on ?? ""} aria-label="Free on a later date" className="min-w-0 flex-1 sm:w-44 sm:flex-none" />
-          </label>
-        </div>
-        {(filtered || on) && (
-          <p className="text-sm text-muted">
-            {on && <>Showing {formatDate(on)}. </>}
-            <Link href={active === "all" ? "/availability" : `/availability?view=${active}`} className="underline underline-offset-2 hover:text-foreground">
-              Clear {on && filtered ? "date and filters" : on ? "date" : "filters"}
-            </Link>
-          </p>
-        )}
+      {/* Phones: search and a Filters button in one row, so the rooms start high on the screen. */}
+      <form className="mb-3 sm:hidden" role="search" aria-label="Find rooms">
+        <FilterToggle search={search} count={activeFilters}>
+          {fields}
+        </FilterToggle>
       </form>
 
-      <nav aria-label="Show" className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {/* Wider screens: everything in view. */}
+      <form className="mb-4 hidden space-y-2 sm:block" role="search" aria-label="Find rooms">
+        <div className="flex gap-2">
+          {search}
+          <Button variant="secondary">Search</Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">{fields}</div>
+      </form>
+
+      {(filtered || on) && (
+        <p className="mb-3 text-sm text-muted">
+          {on && <>Showing {formatDate(on)}. </>}
+          <Link href={clearHref} className="underline underline-offset-2 hover:text-foreground">
+            Clear {on && filtered ? "date and filters" : on ? "date" : "filters"}
+          </Link>
+        </p>
+      )}
+
+      <nav aria-label="Show" className="mb-4 grid grid-cols-2 gap-2 sm:mb-5 sm:grid-cols-4">
         {tiles.map((t) => {
           const isActive = active === t.view;
           return (
@@ -337,12 +367,16 @@ export default async function AvailabilityPage({ searchParams }: PageProps<"/ava
               key={t.view}
               href={isActive ? href("all") : href(t.view)}
               aria-current={isActive ? "page" : undefined}
-              className={`flex min-h-20 flex-col justify-between border p-3 transition-colors ${
+              className={`flex min-h-14 items-center gap-2.5 border px-2.5 py-2 transition-colors sm:min-h-20 sm:flex-col sm:items-stretch sm:justify-between sm:gap-0 sm:py-3 ${
                 isActive ? "border-foreground bg-accent text-accent-foreground" : "border-border bg-surface hover:border-muted/60"
               }`}
             >
-              <span className={`text-sm leading-tight ${isActive ? "" : "text-muted"}`}>{t.label}</span>
-              <span className="flex items-baseline justify-between gap-2">
+              <span className="plate shrink-0 text-2xl font-bold leading-none sm:hidden">{t.count}</span>
+              <span className="min-w-0 leading-tight">
+                <span className={`block text-[13px] sm:text-sm ${isActive ? "" : "text-muted sm:text-muted"}`}>{t.label}</span>
+                <span className={`block text-xs sm:hidden ${isActive ? "opacity-80" : "text-muted"}`}>{t.hint}</span>
+              </span>
+              <span className="hidden items-baseline justify-between gap-2 sm:flex">
                 <span className="plate text-3xl font-bold leading-none">{t.count}</span>
                 <span className={`text-right text-xs leading-tight ${isActive ? "opacity-80" : "text-muted"}`}>{t.hint}</span>
               </span>
@@ -354,7 +388,17 @@ export default async function AvailabilityPage({ searchParams }: PageProps<"/ava
       <div className="mb-2 flex items-baseline justify-between gap-3 text-sm">
         <p className="text-muted">
           {shown.length} {shown.length === 1 ? "room" : "rooms"}
-          {active === "all" ? (onDay ? "" : ", soonest to open first") : ""}
+          {active === "all" && !onDay && !sharedLease && <span className="hidden sm:inline">, soonest to open first</span>}
+          {!sharedLease && "."}
+          {sharedLease && (
+            <>
+              , {shown.length === 1 ? "leased" : "all leased"} to{" "}
+              <Link href={`/contracts/${sharedLease.id}`} className="text-foreground underline underline-offset-2">
+                {sharedLease.clientName}
+              </Link>{" "}
+              until {formatDate(sharedLease.endDate)}.
+            </>
+          )}
         </p>
         {active !== "all" && (
           <Link href={href("all")} className="underline underline-offset-2">
@@ -381,7 +425,7 @@ export default async function AvailabilityPage({ searchParams }: PageProps<"/ava
               </h2>
               <ul className="divide-y divide-border border border-border bg-surface">
                 {g.rooms.map((r) => (
-                  <RoomRow key={r.id} r={r} view={active} on={on} today={today} q={q} />
+                  <RoomRow key={r.id} r={r} view={active} on={on} today={today} q={q} sharedLease={!!sharedLease} oneCompany={oneCompany} />
                 ))}
               </ul>
             </section>

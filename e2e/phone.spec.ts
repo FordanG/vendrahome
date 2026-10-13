@@ -44,6 +44,13 @@ test("phone: staff pages fit the screen and the tab bar reaches them", async ({ 
   expect(pages).toEqual(expect.arrayContaining(["/", "/requests", "/occupants", "/contracts", "/staff"]));
   for (const path of [...pages, "/account", "/occupants/new", "/contracts/new"]) await expectFitsScreen(page, path);
 
+  // Availability puts the rooms first: the first room shows without scrolling.
+  await page.goto("/availability");
+  const firstRoom = page.locator("main section li").first();
+  await expect(firstRoom).toBeVisible();
+  const top = (await firstRoom.boundingBox())!.y;
+  expect.soft(top, `first room on /availability starts ${top}px down`).toBeLessThan(PHONE.viewport.height - 120);
+
   // A detail page of each kind
   for (const [list, link] of [
     ["/rooms", "main a[href^='/rooms/']"],
