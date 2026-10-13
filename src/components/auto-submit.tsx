@@ -1,9 +1,14 @@
 "use client";
 
 import type { ComponentProps } from "react";
-import { Select } from "./ui";
+import { Input, Select } from "./ui";
 
 /** A filter dropdown that applies as soon as something is picked, with no Search button to press. */
 export function AutoSubmitSelect(props: ComponentProps<"select">) {
   return <Select {...props} onChange={(e) => e.currentTarget.form?.requestSubmit()} />;
+}
+
+/** A field (such as a date) that applies as soon as it changes. */
+export function AutoSubmitInput(props: ComponentProps<"input">) {
+  return <Input {...props} onChange={(e) => e.currentTarget.form?.requestSubmit()} />;
 }
