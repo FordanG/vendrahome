@@ -5,7 +5,7 @@ import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
 
 // One database, two homes:
-// - DATABASE_URL set: a hosted Postgres (Supabase). Use the session pooler's connection string.
+// - DATABASE_URL set: a hosted Postgres (Supabase). Use the transaction pooler's connection string (port 6543).
 // - Not set: an embedded Postgres (PGlite) in .data/pglite, for local use and tests.
 // The schema, migrations and queries are the same for both.
 
@@ -24,26 +24,26 @@ export function pgliteDir() {
 export async function connect(options: { migrate: boolean }): Promise<{ db: DB; close: () => Promise<void> }> {
   const url = process.env.DATABASE_URL;
   if (url) {
-    const { default: postgres } = await import("postgres");
-    const { drizzle } = await import("drizzle-orm/postgres-js");
-    // Use Supabase's *session* pooler (port 5432). Its transaction pooler (6543) mixes up the
-    // queries postgres-js sends back to back on one connection, and pages hang.
-    // prepare/fetch_types off keep it working behind any pooler; idle connections close after
-    // 20 seconds so short-lived app instances on Netlify don't hold the pooler's few slots.
-    const client = postgres(url, {
-      prepare: false,
-      fetch_types: false,
+    const { Pool } = await import("pg");
+    const { drizzle } = await import("drizzle-orm/node-postgres");
+    // Use Supabase's *transaction* pooler (port 6543): it shares a few database connections
+    // among many app copies, which serverless hosting starts freely. (The session pooler gives
+    // each app connection its own and refuses more than 15 at once.) The pg driver sends one
+    // query at a time per connection, which this pooler needs. Idle connections close quickly
+    // so short-lived app copies don't hold on to them.
+    const pool = new Pool({
+      connectionString: url,
       max: Number(process.env.DATABASE_POOL_SIZE ?? 3),
-      idle_timeout: 20,
-      onnotice: () => {},
+      idleTimeoutMillis: 5_000,
+      connectionTimeoutMillis: 15_000,
     });
-    const db = drizzle(client, { schema });
+    const db = drizzle(pool, { schema });
     if (options.migrate) {
-      const { migrate } = await import("drizzle-orm/postgres-js/migrator");
+      const { migrate } = await import("drizzle-orm/node-postgres/migrator");
       await migrate(db, { migrationsFolder: MIGRATIONS });
       await lockOutDataApi(db);
     }
-    return { db, close: () => client.end() };
+    return { db, close: () => pool.end() };
   }
   const { PGlite } = await import("@electric-sql/pglite");
   const { drizzle } = await import("drizzle-orm/pglite");

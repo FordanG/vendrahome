@@ -15,13 +15,14 @@ Netlify, where every request may run on a fresh machine.
 
 1. Create a project. Pick region **Southeast Asia (Singapore)**, the closest to the Philippines.
    Save the database password somewhere safe.
-2. Open **Connect → Direct** and copy the **Session pooler** connection string (port 5432,
+2. Open **Connect → Direct** and copy the **Transaction pooler** connection string (port 6543,
    host `aws-0-…pooler.supabase.com`). Put the database password into it. This is `DATABASE_URL`.
-   Don't use the transaction pooler (port 6543): with this app's database driver, pages hang on it.
+   Don't use the session pooler (port 5432): it allows only 15 connections in total, and the
+   app copies Vercel or Netlify start use them up, so sign-ins start timing out.
 3. On your computer, bring the empty database up to date and create the admin account:
 
    ```bash
-   DATABASE_URL='postgresql://postgres.xxxx:PASSWORD@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres' \
+   DATABASE_URL='postgresql://postgres.xxxx:PASSWORD@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres' \
    HOTEL_NAME='Your hotel name' ADMIN_PASSWORD='a long password' pnpm db:seed
    ```
 
@@ -46,9 +47,9 @@ That is expected; don't add policies.
 
    | Name | Value |
    |---|---|
-   | `DATABASE_URL` | the session pooler string from step 1 |
+   | `DATABASE_URL` | the transaction pooler string from step 1 |
    | `APP_URL` | the site's public address, for example `https://vendrahome.netlify.app` |
-   | `DATABASE_POOL_SIZE` | optional, default 3. Connections per app instance; idle ones close after 20 seconds. |
+   | `DATABASE_POOL_SIZE` | optional, default 3. Connections per app copy; idle ones close after 5 seconds. |
 
 4. Deploy, open the address, sign in as `admin` and change the password under **My account**.
 
