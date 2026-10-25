@@ -64,6 +64,12 @@ and `APP_URL` (for example `https://vendrahome.vercel.app`) under Environment Va
 Vercel's free Hobby plan is for non-commercial use; a business running on it day to day
 needs Pro.
 
+The live app runs at `https://vendrahome.vendrato.com`. vendrato.com is registered at
+Namecheap but its DNS is on Netlify (nsone.net name servers), so the records live in
+Netlify: a CNAME `vendrahome` pointing to the target Vercel shows under the project's
+**Settings → Domains**, and a TXT `_vercel` record Vercel asks for to prove ownership.
+`APP_URL` is set to the same address.
+
 ## 3. Backups
 
 - Supabase Pro keeps daily backups for 7 days (**Database → Backups**). Turn on
