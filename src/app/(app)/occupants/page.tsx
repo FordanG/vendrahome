@@ -158,7 +158,7 @@ export default async function OccupantsPage({ searchParams }: PageProps<"/occupa
                     <Td label="Company" wide className="max-sm:order-1">{r.clientName ?? <span className="text-muted">No company</span>}</Td>
                     <Td label="Room">
                       {r.roomNumber ? (
-                        <Link className="underline" href={`/rooms/${r.roomId}`}>
+                        <Link className="link" href={`/rooms/${r.roomId}`}>
                           Room {r.roomNumber}
                           {r.slot && `, ${r.slot}`}
                         </Link>

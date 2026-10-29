@@ -17,13 +17,13 @@ export function FilterToggle({ search, count, children }: { search: ReactNode; c
           aria-expanded={open}
           aria-controls="availability-filters"
           onClick={() => setOpen(!open)}
-          className={`flex min-h-11 shrink-0 items-center gap-1.5 border px-3 text-sm ${open ? "border-foreground bg-accent text-accent-foreground" : "border-border bg-surface"}`}
+          className={`flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm shadow-card ${open ? "border-foreground bg-accent text-accent-foreground" : "border-border bg-surface"}`}
         >
           Filters
           {count > 0 && <span className="rounded-full bg-brand px-1.5 text-xs font-semibold leading-5 text-brand-foreground">{count}</span>}
         </button>
       </div>
-      <div id="availability-filters" hidden={!open} className="mt-2 grid gap-2 border border-border bg-surface p-3">
+      <div id="availability-filters" hidden={!open} className="mt-2 grid gap-2 rounded-xl border border-border bg-surface p-3 shadow-card">
         {children}
       </div>
     </div>

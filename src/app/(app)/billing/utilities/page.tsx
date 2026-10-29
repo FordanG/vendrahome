@@ -85,7 +85,7 @@ export default async function UtilitiesPage({ searchParams }: PageProps<"/billin
                                     {b.method === "meter"
                                       ? `${formatReading(b.currentReading! - b.previousReading!)} ${type.unit ?? ""} at ${formatRate(b.rate)}`
                                       : "From the bill"}
-                                    {b.photoId && <> · <Link className="underline" href={`/api/photos/${b.photoId}`} target="_blank">Photo</Link></>}
+                                    {b.photoId && <> · <Link className="link" href={`/api/photos/${b.photoId}`} target="_blank">Photo</Link></>}
                                   </Td>
                                   <Td label="Amount" className="text-right tabular-nums">{formatPeso(b.amount)}</Td>
                                   <Td className="no-print">{b.chargeId && <ReverseButton action={reverseCharge.bind(null, b.chargeId)} />}</Td>

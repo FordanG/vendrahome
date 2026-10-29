@@ -292,7 +292,7 @@ async function RoomView({ room, token, user }: { room: Room; token: string; user
       )}
 
       <p className="text-sm">
-        <Link className="underline underline-offset-2" href={`/rooms/${room.id}`}>Room details</Link>
+        <Link className="link" href={`/rooms/${room.id}`}>Room details</Link>
       </p>
     </>
   );

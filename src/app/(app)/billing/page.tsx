@@ -22,17 +22,17 @@ export default async function BillingPage() {
       <BillingTabs active="accounts" isAdmin={isAdmin} />
 
       {(overdue.length > 0 || (isAdmin && due.length > 0)) && (
-        <ul className="mb-6 divide-y divide-border overflow-hidden border border-border bg-surface text-sm">
+        <ul className="mb-6 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface text-sm shadow-card">
           {overdue.map((a) => (
-            <li key={a.contract.id} className="border-l-4 border-l-attention px-4 py-3 sm:py-2.5">
-              <Link className="font-medium underline underline-offset-2" href={`/billing/contracts/${a.contract.id}`}>{a.clientName}</Link>{" "}
+            <li key={a.contract.id} className="relative py-3 pl-9 pr-4 before:absolute before:left-4 before:top-[1.15rem] before:size-2 before:rounded-full before:bg-attention sm:py-2.5 sm:before:top-[0.95rem]">
+              <Link className="font-medium link" href={`/billing/contracts/${a.contract.id}`}>{a.clientName}</Link>{" "}
               is {a.overdue!.days} {a.overdue!.days === 1 ? "day" : "days"} late paying {formatPeso(a.overdue!.amount)}, due {formatDate(a.overdue!.since)}.
             </li>
           ))}
           {isAdmin && due.map((a) => (
-            <li key={`due-${a.contract.id}`} className="border-l-4 border-l-brand px-4 py-3 sm:py-2.5">
+            <li key={`due-${a.contract.id}`} className="relative py-3 pl-9 pr-4 before:absolute before:left-4 before:top-[1.15rem] before:size-2 before:rounded-full before:bg-brand sm:py-2.5 sm:before:top-[0.95rem]">
               Statement for month {a.statementDue!.month} of{" "}
-              <Link className="font-medium underline underline-offset-2" href={`/billing/contracts/${a.contract.id}#statement`}>{a.contract.reference}</Link>{" "}
+              <Link className="font-medium link" href={`/billing/contracts/${a.contract.id}#statement`}>{a.contract.reference}</Link>{" "}
               is ready to issue (the month starts {formatDate(a.statementDue!.start)}).
             </li>
           ))}
@@ -59,14 +59,14 @@ export default async function BillingPage() {
               {accounts.map((a) => (
                 <tr key={a.contract.id}>
                   <Td primary>
-                    <Link className="font-medium underline underline-offset-2" href={`/billing/contracts/${a.contract.id}`}>{a.clientName}</Link>
+                    <Link className="font-medium link" href={`/billing/contracts/${a.contract.id}`}>{a.clientName}</Link>
                     <span className="block text-xs text-muted">{a.contract.reference}</span>
                   </Td>
                   <Td label="Status"><StatusBadge balance={a.balance} overdue={a.overdue} /></Td>
                   <Td label="Balance" className="text-right tabular-nums"><Balance amount={a.balance} /></Td>
                   <Td label="Last statement">
                     {a.lastStatement ? (
-                      <Link className="underline underline-offset-2" href={`/billing/statements/${a.lastStatement.id}`}>
+                      <Link className="link" href={`/billing/statements/${a.lastStatement.id}`}>
                         {a.lastStatement.number}
                       </Link>
                     ) : "None yet"}

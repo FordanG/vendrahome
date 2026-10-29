@@ -71,7 +71,7 @@ export default async function HotelsPage() {
                   </form>
                 )}
                 <details className="min-w-0 flex-1">
-                  <summary className="cursor-pointer py-2 text-sm underline underline-offset-2">Edit details</summary>
+                  <summary className="cursor-pointer py-2 text-sm link">Edit details</summary>
                   <ActionForm action={updateHotel.bind(null, h.id)} className="mt-3 space-y-4">
                     <HotelFields hotel={h} />
                   </ActionForm>

@@ -31,10 +31,10 @@ function CountBubble({ count, className = "" }: { count: number; className?: str
 export function SidebarNav({ groups }: { groups: NavGroup[] }) {
   const pathname = usePathname();
   return (
-    <nav className="flex flex-col gap-5 px-3 pb-6">
+    <nav className="flex flex-col gap-5 px-3 pb-6 pt-1">
       {groups.map((g) => (
-        <div key={g.label} className="flex flex-col gap-0.5">
-          <p className="px-3 pb-1 text-xs text-sidebar-muted">{g.label}</p>
+        <div key={g.label} className="flex flex-col gap-px">
+          <p className="px-3 pb-1.5 text-[11px] font-medium text-sidebar-muted/80">{g.label}</p>
           {g.items.map((item) => {
             const active = isActive(pathname, item.href);
             return (
@@ -42,13 +42,17 @@ export function SidebarNav({ groups }: { groups: NavGroup[] }) {
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={`relative flex items-center justify-between gap-3 whitespace-nowrap rounded-md px-3 py-1.5 text-sm transition-colors ${
+                className={`group relative flex items-center gap-3 whitespace-nowrap rounded-lg px-3 py-[7px] text-sm transition-colors ${
                   active
-                    ? "bg-white/10 font-medium text-sidebar-foreground before:absolute before:inset-y-1.5 before:-left-3 before:w-1 before:rounded-r before:bg-brand"
-                    : "text-sidebar-foreground/75 hover:bg-white/5 hover:text-sidebar-foreground"
+                    ? "bg-white/[0.09] font-medium text-sidebar-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-white/[0.05] hover:text-sidebar-foreground"
                 }`}
               >
-                {item.label}
+                <Icon
+                  name={item.icon ?? "more"}
+                  className={`size-[18px] shrink-0 transition-colors ${active ? "text-brand" : "text-sidebar-muted group-hover:text-sidebar-foreground"}`}
+                />
+                <span className="flex-1">{item.label}</span>
                 {!!item.count && <CountBubble count={item.count} />}
               </Link>
             );
@@ -64,14 +68,13 @@ function Tab({ item, active }: { item: NavLink; active: boolean }) {
     <Link
       href={item.href}
       aria-current={active ? "page" : undefined}
-      className={`relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[11px] leading-tight transition-colors ${
-        active ? "font-semibold text-sidebar-foreground" : "text-sidebar-foreground/65"
+      className={`relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 text-[11px] leading-tight transition-colors ${
+        active ? "font-semibold text-sidebar-foreground" : "text-sidebar-foreground/60"
       }`}
     >
-      {active && <span className="absolute inset-x-3 top-0 h-[3px] bg-brand" aria-hidden />}
-      <span className="relative">
-        <Icon name={item.icon ?? "more"} />
-        {!!item.count && <CountBubble count={item.count} className="absolute -right-3 -top-1.5 px-1 text-[10px] leading-4" />}
+      <span className={`relative flex h-7 w-12 items-center justify-center rounded-full transition-colors ${active ? "bg-white/[0.12] text-brand" : ""}`}>
+        <Icon name={item.icon ?? "more"} className="size-[22px]" />
+        {!!item.count && <CountBubble count={item.count} className="absolute -right-0.5 -top-1 px-1 text-[10px] leading-4 ring-2 ring-sidebar" />}
       </span>
       <span className="max-w-full truncate">{item.label}</span>
     </Link>
@@ -111,14 +114,14 @@ export function BottomNav({
       {open && more && (
         <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="More pages">
           {/* Tapping outside closes it; the X button and Escape do the same for keyboards and screen readers. */}
-          <div className="absolute inset-0 bg-black/40" aria-hidden onClick={() => setOpenAt(null)} />
-          <div className="absolute inset-x-0 bottom-0 max-h-[80dvh] overflow-y-auto rounded-t-2xl bg-surface pb-[calc(4.5rem+env(safe-area-inset-bottom))] shadow-2xl">
-            <div className="sticky top-0 flex items-center justify-between border-b border-border bg-surface px-5 py-3">
+          <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" aria-hidden onClick={() => setOpenAt(null)} />
+          <div className="absolute inset-x-0 bottom-0 max-h-[80dvh] overflow-y-auto rounded-t-2xl bg-surface pb-[calc(4.5rem+env(safe-area-inset-bottom))] shadow-pop">
+            <div className="sticky top-0 flex items-center justify-between border-b border-border bg-surface/95 px-5 py-3 backdrop-blur">
               <p className="font-semibold">More</p>
               <button
                 type="button"
                 onClick={() => setOpenAt(null)}
-                className="-mr-2 flex size-11 items-center justify-center rounded-full text-muted hover:bg-background"
+                className="-mr-2 flex size-11 items-center justify-center rounded-full text-muted hover:bg-subtle"
                 aria-label="Close"
               >
                 <Icon name="close" className="size-5" />
@@ -127,7 +130,7 @@ export function BottomNav({
             <nav className="space-y-5 px-3 py-4">
               {more.map((g) => (
                 <div key={g.label}>
-                  <p className="px-3 pb-1 text-xs text-muted">{g.label}</p>
+                  <p className="px-3 pb-1 text-xs font-medium text-muted">{g.label}</p>
                   {g.items.map((item) => {
                     const active = isActive(pathname, item.href, exact);
                     return (
@@ -135,11 +138,12 @@ export function BottomNav({
                         key={item.href}
                         href={item.href}
                         aria-current={active ? "page" : undefined}
-                        className={`flex min-h-12 items-center justify-between rounded-lg px-3 text-base ${
-                          active ? "bg-accent/10 font-medium text-accent" : "hover:bg-background"
+                        className={`flex min-h-12 items-center gap-3 rounded-lg px-3 text-base ${
+                          active ? "bg-foreground/[0.06] font-medium" : "hover:bg-subtle"
                         }`}
                       >
-                        {item.label}
+                        <Icon name={item.icon ?? "more"} className={`size-5 shrink-0 ${active ? "text-brand-ink" : "text-muted"}`} />
+                        <span className="flex-1">{item.label}</span>
                         {!!item.count && <CountBubble count={item.count} />}
                       </Link>
                     );
@@ -152,7 +156,7 @@ export function BottomNav({
         </div>
       )}
       <nav
-        className="fixed inset-x-0 bottom-0 z-50 flex border-t border-white/10 bg-sidebar pb-[env(safe-area-inset-bottom)] text-sidebar-foreground"
+        className="fixed inset-x-0 bottom-0 z-50 flex border-t border-white/[0.06] bg-sidebar/95 px-1 pb-[env(safe-area-inset-bottom)] pt-1 text-sidebar-foreground backdrop-blur"
         aria-label="Main"
       >
         {tabs.map((item) => (
@@ -163,12 +167,13 @@ export function BottomNav({
             type="button"
             onClick={() => setOpenAt(open ? null : pathname)}
             aria-expanded={open}
-            className={`relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[11px] leading-tight ${
-              open || moreActive ? "font-semibold text-sidebar-foreground" : "text-sidebar-foreground/65"
+            className={`relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 text-[11px] leading-tight ${
+              open || moreActive ? "font-semibold text-sidebar-foreground" : "text-sidebar-foreground/60"
             }`}
           >
-            {(open || moreActive) && <span className="absolute inset-x-3 top-0 h-[3px] bg-brand" aria-hidden />}
-            <Icon name="more" />
+            <span className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors ${open || moreActive ? "bg-white/[0.12] text-brand" : ""}`}>
+              <Icon name="more" className="size-[22px]" />
+            </span>
             More
           </button>
         )}

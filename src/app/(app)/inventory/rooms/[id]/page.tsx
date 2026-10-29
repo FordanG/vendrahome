@@ -66,7 +66,7 @@ export default async function RoomInventoryPage({ params, searchParams }: PagePr
             <span className="inline-flex flex-wrap gap-2">
               <span>Floor {room!.floor}{roomType ? `, ${roomType.name}` : ""}.</span>
               <span>{items.length} items{retired > 0 ? `, ${retired} removed earlier` : ""}.</span>
-              <Link className="underline underline-offset-2" href={`/rooms/${room!.id}`}>Room details</Link>
+              <Link className="link" href={`/rooms/${room!.id}`}>Room details</Link>
             </span>
           )
         }
@@ -80,7 +80,7 @@ export default async function RoomInventoryPage({ params, searchParams }: PagePr
             <Empty>
               No items yet.{" "}
               {!storeroom && CAN.manageRooms.includes(user.role) && roomType
-                ? <>Use the <Link className="underline" href="/inventory/templates">standard list for {roomType.name} rooms</Link>, or add items below.</>
+                ? <>Use the <Link className="link" href="/inventory/templates">standard list for {roomType.name} rooms</Link>, or add items below.</>
                 : canManage ? "Add them below." : "The front desk or admin adds them."}
             </Empty>
           )}
@@ -96,7 +96,7 @@ export default async function RoomInventoryPage({ params, searchParams }: PagePr
             />
           ))}
           {canManage && (
-            <details className="border border-border bg-surface">
+            <details className="overflow-hidden rounded-xl border border-border bg-surface shadow-card">
               <summary className="cursor-pointer select-none px-5 py-4 text-base font-semibold">Add an item</summary>
               <div className="border-t border-border p-5">
                 <ActionForm action={addItem.bind(null, roomId)} submitLabel="Add item" resetOnSuccess>
@@ -153,7 +153,7 @@ export default async function RoomInventoryPage({ params, searchParams }: PagePr
                           </Field>
                         </div>
                         <details>
-                          <summary className="cursor-pointer text-xs text-muted underline underline-offset-2">Add a note or photo</summary>
+                          <summary className="cursor-pointer text-xs text-muted link">Add a note or photo</summary>
                           <div className="mt-2 space-y-2">
                             <Input name={`note_${item.id}`} placeholder="e.g. Scratch on the left door" aria-label={`${item.name} note`} />
                             <Input name={`photo_${item.id}`} type="file" accept="image/*" aria-label={`${item.name} photo`} />
@@ -178,7 +178,7 @@ export default async function RoomInventoryPage({ params, searchParams }: PagePr
                 <ul className="divide-y divide-border text-sm">
                   {checks.map(({ check, by }) => (
                     <li key={check.id} className="py-2">
-                      <Link className="font-medium underline underline-offset-2" href={`/inventory/checks/${check.id}`}>
+                      <Link className="font-medium link" href={`/inventory/checks/${check.id}`}>
                         {CHECK_KIND_LABELS[check.kind]}, {formatDate(check.checkedOn)}
                       </Link>
                       <span className="block text-xs text-muted">{[by && `By ${by}`, check.signedBy && `signed off by ${check.signedBy}`].filter(Boolean).join(", ")}</span>
@@ -224,7 +224,7 @@ function ItemCard({
           </p>
           {details && <p className="text-xs text-muted">{details}</p>}
           {item.notes && <p className="mt-1 text-sm">{item.notes}</p>}
-          {item.photoId && <Link className="text-xs underline" href={`/api/photos/${item.photoId}`} target="_blank">Photo</Link>}
+          {item.photoId && <Link className="text-xs link" href={`/api/photos/${item.photoId}`} target="_blank">Photo</Link>}
         </div>
         <Badge tone={CONDITION_TONES[item.condition]}>{CONDITION_LABELS[item.condition]}</Badge>
       </div>
@@ -322,7 +322,7 @@ function ItemCard({
 function Action({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <details className="group w-full sm:w-auto">
-      <summary className="inline-flex min-h-9 cursor-pointer select-none items-center text-muted underline underline-offset-2 hover:text-foreground group-open:text-foreground">{label}</summary>
+      <summary className="inline-flex min-h-9 cursor-pointer select-none items-center text-muted link hover:text-foreground group-open:text-foreground">{label}</summary>
       <div className="mt-2 w-full border-t border-border pt-3 sm:w-96">{children}</div>
     </details>
   );

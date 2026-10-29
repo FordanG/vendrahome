@@ -56,7 +56,7 @@ export default async function LaundrySettingsPage() {
                 {s.costPerKilo != null && `. The shop charges ${formatPeso(s.costPerKilo)} a kilo`}.
               </p>
               <details>
-                <summary className="cursor-pointer text-sm underline underline-offset-2">Change</summary>
+                <summary className="cursor-pointer text-sm link">Change</summary>
                 <ActionForm action={saveService.bind(null, s.id)} className="mt-3 space-y-4">
                   <ServiceFields s={s} />
                   <label className="flex items-center gap-2 text-sm">

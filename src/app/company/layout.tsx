@@ -6,6 +6,7 @@ import { BottomNav, type NavLink } from "../(app)/nav-links";
 import { TopTabs } from "../me/top-tabs";
 import { logout } from "./actions";
 import { Brand } from "@/components/brand";
+import { Icon } from "@/components/icons";
 
 export default async function CompanyLayout({ children }: LayoutProps<"/company">) {
   const { user, client } = await requireCompany();
@@ -31,22 +32,19 @@ export default async function CompanyLayout({ children }: LayoutProps<"/company"
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <header className="no-print sticky top-0 z-30 border-b border-white/10 bg-sidebar pt-[env(safe-area-inset-top)] text-sidebar-foreground md:static">
-        <div className="mx-auto max-w-4xl">
-          <div className="flex h-12 items-center justify-between gap-3 px-4 md:h-auto md:pb-2 md:pt-4">
-            <div className="min-w-0">
-              <Brand className="text-lg" />
-              <p className="mt-1 hidden break-words text-xs text-sidebar-muted md:block">
-                {client.name}. {user.name}, {ROLE_LABELS[user.role]}
-              </p>
-            </div>
+      <header className="no-print sticky top-0 z-30 border-b border-white/[0.06] bg-sidebar/95 pt-[env(safe-area-inset-top)] text-sidebar-foreground backdrop-blur">
+        <div className="mx-auto flex h-12 max-w-4xl items-center justify-between gap-4 px-4 md:h-16">
+          <Brand className="shrink-0 text-lg" />
+          <TopTabs items={nav} />
+          <div className="flex min-w-0 items-center gap-3">
+            <p className="hidden min-w-0 truncate text-right text-xs text-sidebar-muted lg:block">{client.name}. {user.name}, {ROLE_LABELS[user.role]}</p>
             <form action={logout} className="shrink-0">
-              <button className="-mr-2 min-h-11 whitespace-nowrap px-2 text-sm text-sidebar-muted underline-offset-2 hover:text-sidebar-foreground hover:underline md:min-h-0 md:text-xs">
+              <button className="-mr-2 flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-2 text-sm text-sidebar-muted transition-colors hover:bg-white/[0.06] hover:text-sidebar-foreground md:min-h-9">
+                <Icon name="signout" className="size-[18px]" />
                 Sign out
               </button>
             </form>
           </div>
-          <TopTabs items={nav} />
         </div>
       </header>
       <BottomNav tabs={tabs} more={more.length ? [{ label: client.name, items: more }] : undefined} exact />

@@ -60,7 +60,7 @@ export default async function TenantLaundryPage() {
                 ))}
                 {canClaim && (
                   <details className="mt-2">
-                    <summary className="cursor-pointer text-sm underline underline-offset-2">Something missing or damaged?</summary>
+                    <summary className="cursor-pointer text-sm link">Something missing or damaged?</summary>
                     <ActionForm action={reportLaundryClaim.bind(null, l.id)} submitLabel="Send" pendingLabel="Sending…" resetOnSuccess className="mt-3 space-y-3">
                       <Field label="What happened">
                         <Select name="kind" defaultValue="missing">

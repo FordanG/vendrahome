@@ -145,7 +145,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                 </div>
                 <p className="mt-2 max-w-prose whitespace-pre-wrap text-sm">{r.details}</p>
                 {r.photoId && (
-                  <a className="mt-2 inline-block text-sm underline" href={`/api/photos/${r.photoId}`} target="_blank" rel="noreferrer">
+                  <a className="mt-2 inline-block text-sm link" href={`/api/photos/${r.photoId}`} target="_blank" rel="noreferrer">
                     See the photo
                   </a>
                 )}
@@ -154,7 +154,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                     <>
                       From{" "}
                       {canSeePeople ? (
-                        <Link className="text-foreground underline underline-offset-2" href={`/occupants/${r.occupantId}`}>
+                        <Link className="text-foreground link" href={`/occupants/${r.occupantId}`}>
                           {name}
                         </Link>
                       ) : (
@@ -188,7 +188,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                 )}
                 {canHandle && r.kind !== "laundry" && !r.chargeId && (
                   <details className="mt-3">
-                    <summary className="cursor-pointer text-sm underline underline-offset-2">{r.cost == null ? "Record the repair cost" : "Change the repair cost"}</summary>
+                    <summary className="cursor-pointer text-sm link">{r.cost == null ? "Record the repair cost" : "Change the repair cost"}</summary>
                     <ActionForm action={recordRepairCost.bind(null, r.id)} submitLabel="Save cost" className="mt-3 flex flex-wrap items-end gap-3">
                       <Field label="Cost, parts and labour">
                         <Input name="cost" inputMode="decimal" defaultValue={centavosToInput(r.cost)} required className="w-32" />
@@ -250,9 +250,9 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
         })}
       </div>
       <nav className="mt-5 flex gap-5" aria-label="Request pages">
-        {page > 1 && <Link className="underline" href={`/requests?view=${view}&page=${page - 1}`}>Previous</Link>}
+        {page > 1 && <Link className="link" href={`/requests?view=${view}&page=${page - 1}`}>Previous</Link>}
         {(page > 1 || page * pageSize < countFor(view)) && <span>Page {page}</span>}
-        {page * pageSize < countFor(view) && <Link className="underline" href={`/requests?view=${view}&page=${page + 1}`}>Next</Link>}
+        {page * pageSize < countFor(view) && <Link className="link" href={`/requests?view=${view}&page=${page + 1}`}>Next</Link>}
       </nav>
     </>
   );

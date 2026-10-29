@@ -88,7 +88,7 @@ export default async function DoorCodesPage({ searchParams }: PageProps<"/rooms/
                       <span className="text-muted">{[a.floor != null && `Floor ${a.floor}`, !a.active && "Code turned off"].filter(Boolean).join(", ")}</span>
                     </summary>
                     <p className="mt-2 text-xs text-muted">
-                      Its address is <a className="break-all underline" href={areaUrls.get(a.id)}>{areaUrls.get(a.id)}</a>
+                      Its address is <a className="break-all link" href={areaUrls.get(a.id)}>{areaUrls.get(a.id)}</a>
                     </p>
                     <ActionForm action={updateArea.bind(null, a.id)} className="mt-3 space-y-3">
                       <FormGrid>

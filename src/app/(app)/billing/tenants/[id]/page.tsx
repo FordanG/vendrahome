@@ -29,7 +29,7 @@ export default async function TenantAccountPage({ params }: PageProps<"/billing/
         title={occupant.fullName}
         subtitle={
           <span className="inline-flex flex-wrap gap-2">
-            <Link className="underline underline-offset-2" href={`/occupants/${occupant.id}`}>Tenant details</Link>
+            <Link className="link" href={`/occupants/${occupant.id}`}>Tenant details</Link>
             <span>{stay ? `Room ${stay.room.number}` : "No current room"}</span>
           </span>
         }

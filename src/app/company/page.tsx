@@ -62,7 +62,7 @@ export default async function CompanyHome() {
       {open > 0 && (
         <p className="mb-6 text-sm">
           {open} {open === 1 ? "request is" : "requests are"} with the front desk.{" "}
-          <Link className="underline" href="/company/requests">
+          <Link className="link" href="/company/requests">
             See requests
           </Link>
         </p>

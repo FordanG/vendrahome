@@ -36,7 +36,7 @@ export function Balance({ amount, className = "" }: { amount: number; className?
 export function ReverseButton({ action, label = "Reverse" }: { action: Parameters<typeof ActionForm>[0]["action"]; label?: string }) {
   return (
     <details className="group">
-      <summary className="inline-flex min-h-9 cursor-pointer select-none items-center text-xs text-muted underline underline-offset-2 hover:text-foreground">
+      <summary className="inline-flex min-h-9 cursor-pointer select-none items-center text-xs text-muted link hover:text-foreground">
         {label}
       </summary>
       <div className="mt-2 w-64 max-w-full">
@@ -114,7 +114,7 @@ export function Ledger({
                 <div className="flex flex-col items-start gap-1">
                   {canRecord && !r.item.charge.statementId && !r.item.reversed && !r.item.charge.reversesId && r.item.typeCode !== "rent" && r.item.typeCode !== "utility" && (r.item.charge.billTo === "company" ? r.item.charge.occupantId : r.item.charge.contractId) && (
                     <form action={async () => { "use server"; await switchPayer(r.item.charge.id); }}>
-                      <button className="min-h-9 text-xs text-muted underline underline-offset-2 hover:text-foreground">
+                      <button className="min-h-9 text-xs text-muted link hover:text-foreground">
                         Bill the {r.item.charge.billTo === "company" ? "tenant" : "company"} instead
                       </button>
                     </form>
@@ -139,7 +139,7 @@ export function Ledger({
                   {r.item.payment.proofPhotoId && (
                     <>
                       {" "}
-                      <Link className="underline" href={`/api/photos/${r.item.payment.proofPhotoId}`} target="_blank">Proof of payment</Link>
+                      <Link className="link" href={`/api/photos/${r.item.payment.proofPhotoId}`} target="_blank">Proof of payment</Link>
                     </>
                   )}
                 </span>

@@ -53,7 +53,7 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
         {stay ? (
           area ? (
           <Card className="border-brand">
-            <SectionTitle actions={<Link className="text-sm text-muted underline" href="/me/requests">Something else?</Link>}>
+            <SectionTitle actions={<Link className="text-sm text-muted link" href="/me/requests">Something else?</Link>}>
               Report a problem: {area.name}
             </SectionTitle>
             <ActionForm action={createRequest} submitLabel="Send" pendingLabel="Sending…" resetOnSuccess>
@@ -150,9 +150,9 @@ export default async function TenantRequestsPage({ searchParams }: PageProps<"/m
             </div>
           )}
           {totalPages > 1 && <nav className="mt-4 flex items-center gap-5 text-sm" aria-label="Your request pages">
-            {page > 1 && <Link className="underline" href={`/me/requests?page=${page - 1}`}>Newer requests</Link>}
+            {page > 1 && <Link className="link" href={`/me/requests?page=${page - 1}`}>Newer requests</Link>}
             <span>Page {page} of {totalPages}</span>
-            {page < totalPages && <Link className="underline" href={`/me/requests?page=${page + 1}`}>Older requests</Link>}
+            {page < totalPages && <Link className="link" href={`/me/requests?page=${page + 1}`}>Older requests</Link>}
           </nav>}
         </section>
       </div>

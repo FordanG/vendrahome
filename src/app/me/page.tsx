@@ -142,7 +142,7 @@ export default async function TenantHomePage() {
               <Timetable entries={mine.filter((e) => e.kind === "kitchen")} today={weekday} />
             </Card>
             <Card>
-              <SectionTitle actions={<Link className="text-sm text-muted underline" href="/me/laundry">Your laundry</Link>}>
+              <SectionTitle actions={<Link className="text-sm text-muted link" href="/me/laundry">Your laundry</Link>}>
                 Laundry days
               </SectionTitle>
               {laundry.length > 0 && (
@@ -163,7 +163,7 @@ export default async function TenantHomePage() {
         <Card>
           <SectionTitle
             actions={
-              <Link className="text-sm text-muted underline" href="/me/requests">
+              <Link className="text-sm text-muted link" href="/me/requests">
                 All requests
               </Link>
             }

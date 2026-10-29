@@ -108,7 +108,7 @@ export default async function LaundryPage() {
                     </p>
                     <p className="whitespace-pre-wrap text-sm">{c.details}</p>
                     {c.photoId && (
-                      <a className="text-sm underline" href={`/api/photos/${c.photoId}`} target="_blank" rel="noreferrer">
+                      <a className="text-sm link" href={`/api/photos/${c.photoId}`} target="_blank" rel="noreferrer">
                         See the photo
                       </a>
                     )}
@@ -246,7 +246,7 @@ export default async function LaundryPage() {
               <p className="text-sm text-muted">
                 {seeMargin ? (
                   <>
-                    Add a service and its price per kilo first, under <Link className="underline" href="/laundry/settings">Services and rates</Link>.
+                    Add a service and its price per kilo first, under <Link className="link" href="/laundry/settings">Services and rates</Link>.
                   </>
                 ) : (
                   "The admin needs to add a laundry service and its price first."

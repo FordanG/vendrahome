@@ -85,7 +85,7 @@ export default async function CleaningPage({ params }: PageProps<"/housekeeping/
             </dl>
             <p className="mt-4 text-sm">
               Something broken or missing?{" "}
-              <Link className="underline" href={`/inventory/rooms/${room.id}`}>Open the room&apos;s items</Link>
+              <Link className="link" href={`/inventory/rooms/${room.id}`}>Open the room&apos;s items</Link>
             </p>
           </Card>
           {!finished && (

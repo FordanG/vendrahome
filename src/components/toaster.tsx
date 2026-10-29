@@ -30,7 +30,7 @@ export function Toaster() {
         <p
           key={message.at}
           role="status"
-          className="pointer-events-auto max-w-md border-l-4 border-l-brand bg-sidebar px-4 py-3 text-sm text-sidebar-foreground shadow-lg"
+          className="pointer-events-auto relative max-w-md rounded-xl bg-sidebar py-3 pl-9 pr-4 text-sm text-sidebar-foreground shadow-pop before:absolute before:left-4 before:top-[1.1rem] before:size-2 before:rounded-full before:bg-brand"
           onClick={() => setMessage(null)}
         >
           {message.text}

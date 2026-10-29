@@ -29,7 +29,7 @@ export const SWATCH: Record<RoomStatus, string> = {
 export function RoomPlate({ number, status }: { number: string; status?: RoomStatus }) {
   return (
     <span
-      className={`plate flex h-11 w-14 shrink-0 items-center justify-center rounded-md border text-xl font-bold ${
+      className={`plate flex h-11 w-14 shrink-0 items-center justify-center rounded-lg border text-xl font-bold ${
         status ? SLOT[status] : "border-border bg-background text-foreground"
       }`}
     >
@@ -41,7 +41,7 @@ export function RoomPlate({ number, status }: { number: string; status?: RoomSta
 
 export function RowList({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <ul className={`divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface ${className}`}>
+    <ul className={`divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface shadow-card ${className}`}>
       {children}
     </ul>
   );
@@ -70,7 +70,7 @@ export function Row({
     <li className="flex items-center">
       <Link
         href={href}
-        className="flex min-h-16 min-w-0 flex-1 items-center gap-3 py-3 pl-4 pr-3 active:bg-background"
+        className="flex min-h-16 min-w-0 flex-1 items-center gap-3 py-3 pl-4 pr-3 transition-colors hover:bg-subtle active:bg-subtle"
       >
         {plate}
         <span className="min-w-0 flex-1">
@@ -81,7 +81,7 @@ export function Row({
           {children && <span className="mt-0.5 block space-y-0.5 text-sm leading-snug text-muted">{children}</span>}
         </span>
         {!action && (
-          <svg viewBox="0 0 24 24" className="size-5 shrink-0 text-muted/70" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+          <svg viewBox="0 0 24 24" className="size-5 shrink-0 text-muted/50" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
             <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
@@ -112,7 +112,7 @@ export function FloorJump({ floors }: { floors: number[] }) {
         <a
           key={f}
           href={`#floor-${f}`}
-          className="plate flex size-10 shrink-0 items-center justify-center border border-border bg-surface text-base font-bold active:bg-background"
+          className="plate flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-surface text-base font-bold shadow-card active:bg-subtle"
         >
           {f}
         </a>

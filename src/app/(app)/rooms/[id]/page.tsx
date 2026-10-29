@@ -63,7 +63,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
             <Badge tone={STATUS_TONES[live.status]}>{STATUS_LABELS[live.status]}</Badge>
             Floor {room.floor}, {live.typeName ?? "no room type set"}, {bedsTaken(live.occupants.length, room.capacity)}
             {CAN.viewInventory.includes(user.role) && (
-              <Link className="underline underline-offset-2" href={`/inventory/rooms/${room.id}`}>Items in this room</Link>
+              <Link className="link" href={`/inventory/rooms/${room.id}`}>Items in this room</Link>
             )}
           </span>
         }
@@ -94,7 +94,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
               {CAN.viewClients.includes(user.role) && <Detail label="Contract">
                 {live.contract ? (
                   canSeePeople ? (
-                    <Link className="underline" href={`/contracts/${live.contract.id}`}>
+                    <Link className="link" href={`/contracts/${live.contract.id}`}>
                       {live.contract.clientName}, contract {live.contract.reference}
                     </Link>
                   ) : (
@@ -157,7 +157,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
                 <div key={o.assignmentId} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3 text-sm">
                   <div>
                     {canSeePeople ? (
-                      <Link className="font-medium underline" href={`/occupants/${o.occupantId}`}>
+                      <Link className="font-medium link" href={`/occupants/${o.occupantId}`}>
                         {o.fullName}
                       </Link>
                     ) : (
@@ -183,7 +183,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
             <Card className="border-warn">
               <SectionTitle
                 actions={
-                  <Link className="text-sm text-muted underline underline-offset-2" href="/requests">
+                  <Link className="text-sm text-muted link" href="/requests">
                     All requests
                   </Link>
                 }
@@ -224,7 +224,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
                     {history.map(({ a, name }) => (
                       <tr key={a.id}>
                         <Td primary>
-                          <Link className="underline" href={`/occupants/${a.occupantId}`}>
+                          <Link className="link" href={`/occupants/${a.occupantId}`}>
                             {name}
                           </Link>
                         </Td>
@@ -281,7 +281,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
             <Card>
               <SectionTitle
                 actions={
-                  <Link className="text-sm text-muted underline underline-offset-2" href={`/rooms/door-codes?room=${room.id}`}>
+                  <Link className="text-sm text-muted link" href={`/rooms/door-codes?room=${room.id}`}>
                     Print
                   </Link>
                 }
@@ -291,7 +291,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
               <div className="mx-auto w-40 bg-white p-1" dangerouslySetInnerHTML={{ __html: doorCode }} />
               <p className="mt-3 text-xs text-muted">
                 Tenants scan it to ask for help. Staff scan it to check in at the room. Its address is{" "}
-                <a className="break-all underline" href={scanUrl!}>{scanUrl}</a>
+                <a className="break-all link" href={scanUrl!}>{scanUrl}</a>
               </p>
               {canManage && (
                 <div className="mt-4 border-t border-border pt-4">

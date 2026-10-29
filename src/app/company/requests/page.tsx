@@ -62,7 +62,7 @@ export default async function CompanyRequestsPage() {
                         </Field>
                       </ActionForm>
                       <details className="mt-3">
-                        <summary className="cursor-pointer text-sm underline underline-offset-2">Decline</summary>
+                        <summary className="cursor-pointer text-sm link">Decline</summary>
                         <ActionForm action={reviewRequest.bind(null, r.id)} submitLabel="Decline" submitVariant="danger" pendingLabel="Saving…" className="mt-3 space-y-3">
                           <input type="hidden" name="decision" value="decline" />
                           <Field label="Why" hint="The tenant sees this">

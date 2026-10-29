@@ -74,14 +74,14 @@ export default async function OccupantPage({ params }: PageProps<"/occupants/[id
               <Badge>Moved out</Badge>
             )}
             {client && (
-              <Link className="underline" href={`/clients/${client.id}`}>
+              <Link className="link" href={`/clients/${client.id}`}>
                 {client.name}
               </Link>
             )}
             {occupant.employeeId && <span>Employee ID {occupant.employeeId}</span>}
             {occupant.position && <span>{occupant.position}</span>}
             {CAN.viewBilling.includes(user.role) && (
-              <Link className="underline" href={`/billing/tenants/${occupant.id}`}>
+              <Link className="link" href={`/billing/tenants/${occupant.id}`}>
                 Charges and payments
               </Link>
             )}
@@ -97,7 +97,7 @@ export default async function OccupantPage({ params }: PageProps<"/occupants/[id
               <div className="space-y-4">
                 <dl className="grid gap-4 sm:grid-cols-3">
                   <Detail label="Room">
-                    <Link className="underline" href={`/rooms/${current.a.roomId}`}>
+                    <Link className="link" href={`/rooms/${current.a.roomId}`}>
                       {current.roomNumber}
                     </Link>
                   </Detail>

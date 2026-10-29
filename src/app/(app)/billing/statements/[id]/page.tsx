@@ -105,7 +105,7 @@ export default async function StatementPage({ params }: PageProps<"/billing/stat
         </p>
       </Card>
       <p className="no-print mt-4 text-center text-sm">
-        <Link className="underline underline-offset-2" href={`/billing/contracts/${statement.contractId}`}>Back to the account</Link>
+        <Link className="link" href={`/billing/contracts/${statement.contractId}`}>Back to the account</Link>
       </p>
     </>
   );

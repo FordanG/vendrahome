@@ -33,7 +33,7 @@ export default async function NewAssignmentPage({ searchParams }: PageProps<"/as
       <Card className="max-w-3xl">
         <p className="mb-4 text-sm text-muted">
           Pick a tenant who is already on file but has no room.{" "}
-          <Link className="underline" href={`/occupants/new${roomId ? `?room=${roomId}` : ""}`}>
+          <Link className="link" href={`/occupants/new${roomId ? `?room=${roomId}` : ""}`}>
             Add a new tenant instead
           </Link>
           .

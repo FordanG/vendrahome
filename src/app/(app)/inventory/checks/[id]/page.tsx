@@ -79,7 +79,7 @@ export default async function CheckPage({ params }: PageProps<"/inventory/checks
           <>
             <p className="mb-3 text-sm text-muted">
               Compared with the{" "}
-              <Link className="underline underline-offset-2" href={`/inventory/checks/${baseline.id}`}>
+              <Link className="link" href={`/inventory/checks/${baseline.id}`}>
                 {CHECK_KIND_LABELS[baseline.kind].toLowerCase()} of {formatDate(baseline.checkedOn)}
               </Link>.
             </p>
@@ -148,7 +148,7 @@ export default async function CheckPage({ params }: PageProps<"/inventory/checks
                 <Td label="Condition"><Badge tone={CONDITION_TONES[line.condition]}>{CONDITION_LABELS[line.condition]}</Badge></Td>
                 <Td label="Note" wide>
                   {line.note}
-                  {line.photoId && <> <Link className="underline" href={`/api/photos/${line.photoId}`} target="_blank">Photo</Link></>}
+                  {line.photoId && <> <Link className="link" href={`/api/photos/${line.photoId}`} target="_blank">Photo</Link></>}
                 </Td>
               </tr>
             ))}

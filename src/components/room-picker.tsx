@@ -21,10 +21,10 @@ export function RoomPicker({ rooms, name }: { rooms: PickRoom[]; name: string })
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <span className="text-muted">{picked.size} selected</span>
-        <button type="button" className="underline" onClick={() => toggle(rooms.map((r) => r.id), true)}>
+        <button type="button" className="link" onClick={() => toggle(rooms.map((r) => r.id), true)}>
           Select all
         </button>
-        <button type="button" className="underline" onClick={() => setPicked(new Set())}>
+        <button type="button" className="link" onClick={() => setPicked(new Set())}>
           Clear
         </button>
       </div>

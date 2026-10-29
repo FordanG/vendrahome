@@ -111,7 +111,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
               <Card key={s.id} className="border-brand p-3 sm:p-4">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <Badge tone="amber">{STAY_REQUEST_LABELS[s.kind]}</Badge>
-                  <Link className="font-semibold underline" href={`/occupants/${s.occupantId}`}>
+                  <Link className="font-semibold link" href={`/occupants/${s.occupantId}`}>
                     {fullName}
                   </Link>
                   <span className="text-muted">{company}</span>
@@ -147,7 +147,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
                   )}
                 </ActionForm>
                 <details className="mt-2">
-                  <summary className="cursor-pointer text-sm text-muted underline underline-offset-2">Decline</summary>
+                  <summary className="cursor-pointer text-sm text-muted link">Decline</summary>
                   <ActionForm action={declineStayRequest.bind(null, s.id)} submitLabel="Decline" submitVariant="danger" className="mt-2 space-y-3">
                     <Field label="Why" hint="The company sees this">
                       <Input name="response" required maxLength={1000} />
@@ -169,7 +169,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
             <ul className="space-y-1 text-sm">
               {checkIns.map((o) => (
                 <li key={o.assignmentId}>
-                  <Link className="underline" href={`/occupants/${o.occupantId}`}>
+                  <Link className="link" href={`/occupants/${o.occupantId}`}>
                     {o.fullName}
                   </Link>{" "}
                   moves into room {o.roomNumber} on {formatDate(o.checkIn)}
@@ -186,7 +186,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
             <ul className="space-y-1 text-sm">
               {checkOuts.map((o) => (
                 <li key={o.occupantId} className={o.expectedCheckOut! < today ? "text-attention" : ""}>
-                  <Link className="underline" href={`/occupants/${o.occupantId}`}>
+                  <Link className="link" href={`/occupants/${o.occupantId}`}>
                     {o.fullName}
                   </Link>{" "}
                   in room {o.roomNumber}
@@ -206,7 +206,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
             <ul className="space-y-1 text-sm">
               {unassigned.slice(0, 12).map((o) => (
                 <li key={o.id}>
-                  <Link className="underline" href={`/occupants/${o.id}`}>
+                  <Link className="link" href={`/occupants/${o.id}`}>
                     {o.fullName}
                   </Link>
                   {o.employeeId && <span className="text-muted"> (employee ID {o.employeeId})</span>}
@@ -310,7 +310,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
                         {r.occupants.length === 0 && r.upcoming.length === 0 && <span className="text-muted">No one</span>}
                         {r.occupants.map((o) => (
                           <div key={o.assignmentId}>
-                            <Link className="underline" href={`/occupants/${o.occupantId}`}>
+                            <Link className="link" href={`/occupants/${o.occupantId}`}>
                               {o.fullName}
                             </Link>
                             <span className="text-xs text-muted">
@@ -328,7 +328,7 @@ export default async function AssignmentsPage({ searchParams }: PageProps<"/assi
                       <Td className="text-right max-sm:order-2">
                         {free > 0 && r.status !== "not_available" && (
                           <Link
-                            className="inline-flex min-h-11 items-center text-sm text-accent underline sm:min-h-0"
+                            className="inline-flex min-h-11 items-center text-sm text-accent link sm:min-h-0"
                             href={`/assignments/new?room=${r.id}`}
                           >
                             Give a room

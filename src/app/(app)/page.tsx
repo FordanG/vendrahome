@@ -26,7 +26,7 @@ const matches = (r: { status: RoomStatus; needsWork: boolean }, s: RoomStatus) =
 function BoardKey({ types }: { types: (string | null)[] }) {
   // Room types only show on the slots when there is more than one.
   const showTypes = types.length > 1;
-  const example = "relative flex h-9 w-12 shrink-0 flex-col justify-between rounded border px-1 py-0.5";
+  const example = "relative flex h-9 w-12 shrink-0 flex-col justify-between rounded-md border px-1 py-0.5";
   return (
     <div>
       <h2 className="mb-2 text-sm font-semibold">How to read a room</h2>
@@ -124,30 +124,30 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
       />
 
       {hasNotices && (
-        <ul className="mb-6 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface text-sm">
+        <ul className="mb-6 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface text-sm shadow-card">
           {waiting > 0 && (
-            <li className="border-l-4 border-l-brand px-4 py-3 sm:py-2.5">
-              <Link className="font-medium underline underline-offset-2" href="/requests?view=pending">
+            <li className="relative py-3 pl-9 pr-4 before:absolute before:left-4 before:top-[1.15rem] before:size-2 before:rounded-full before:bg-brand sm:py-2.5 sm:before:top-[0.95rem]">
+              <Link className="font-medium link" href="/requests?view=pending">
                 {waiting} {waiting === 1 ? "request needs" : "requests need"} a reply
               </Link>{" "}
               waiting to be handled.
             </li>
           )}
           {endingContracts.map((c) => (
-            <li key={c.id} className="border-l-4 border-l-warn px-4 py-3 sm:py-2.5">
+            <li key={c.id} className="relative py-3 pl-9 pr-4 before:absolute before:left-4 before:top-[1.15rem] before:size-2 before:rounded-full before:bg-warn sm:py-2.5 sm:before:top-[0.95rem]">
               Contract{" "}
-              <Link className="font-medium underline underline-offset-2" href={`/contracts/${c.id}`}>
+              <Link className="font-medium link" href={`/contracts/${c.id}`}>
                 {c.reference}
               </Link>{" "}
               for {c.clientName} {c.endDate < today ? "expired" : "ends"} {formatDate(c.endDate)}. {c.endDate < today ? "Resolve continuing stays or renew coverage." : `${daysBetween(today, c.endDate)} days left.`}
             </li>
           ))}
-          {uncovered.map(r => <li key={r.id} className="border-l-4 border-l-attention px-4 py-3">
-            <Link className="underline" href={`/rooms/${r.id}`}>Room {r.number}</Link> has tenants but no active contract covers it. Add the room to a contract.
+          {uncovered.map(r => <li key={r.id} className="relative py-3 pl-9 pr-4 before:absolute before:left-4 before:top-[1.15rem] before:size-2 before:rounded-full before:bg-attention sm:py-2.5 sm:before:top-[0.95rem]">
+            <Link className="link" href={`/rooms/${r.id}`}>Room {r.number}</Link> has tenants but no active contract covers it. Add the room to a contract.
           </li>)}
           {checkOutsSoon.map((o) => (
-            <li key={o.assignmentId} className="border-l-4 border-l-border px-4 py-3 sm:py-2.5">
-              <Link className="font-medium underline underline-offset-2" href={`/occupants/${o.occupantId}`}>
+            <li key={o.assignmentId} className="relative py-3 pl-9 pr-4 before:absolute before:left-4 before:top-[1.15rem] before:size-2 before:rounded-full before:bg-muted/50 sm:py-2.5 sm:before:top-[0.95rem]">
+              <Link className="font-medium link" href={`/occupants/${o.occupantId}`}>
                 {o.fullName}
               </Link>{" "}
               in room {o.room} is expected to move out on {formatDate(o.expectedCheckOut)}.
@@ -168,8 +168,8 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
             href={status === s ? "/" : `/?status=${s}`}
             aria-pressed={status === s}
             title={STATUS_HELP[s]}
-            className={`flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap border px-3 py-1 text-sm transition-colors sm:min-h-0 sm:py-1.5 ${
-              status === s ? "border-foreground bg-surface" : "border-border hover:border-muted/60"
+            className={`flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-1 text-sm transition sm:min-h-0 sm:py-1.5 ${
+              status === s ? "border-foreground bg-surface shadow-card" : "border-border bg-surface/60 hover:border-field-border hover:bg-surface"
             } ${counts[s] === 0 ? "text-muted" : ""}`}
           >
             <span className={`size-3 rounded-[3px] ${SWATCH[s]}`} aria-hidden />
@@ -178,7 +178,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
           </Link>
         ))}
         {status && (
-          <Link href="/" className="flex min-h-10 shrink-0 items-center whitespace-nowrap px-2 text-sm text-muted underline underline-offset-2 sm:min-h-0">
+          <Link href="/" className="flex min-h-10 shrink-0 items-center whitespace-nowrap px-2 text-sm text-muted link sm:min-h-0">
             Show all
           </Link>
         )}
@@ -201,7 +201,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
                   {rooms.map((r) => (
                     <span
                       key={r.id}
-                      className={`size-3 ${SWATCH[r.status]} ${r.needsWork && r.status !== "needs_work" ? "ring-2 ring-warn" : ""} ${
+                      className={`size-3 rounded-[3px] ${SWATCH[r.status]} ${r.needsWork && r.status !== "needs_work" ? "ring-2 ring-warn" : ""} ${
                         status && !matches(r, status) ? "opacity-20" : ""
                       }`}
                     />
@@ -213,12 +213,12 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
                 {(attention > 0 || urgentCount > 0) && (
                   <span className="flex gap-1.5 sm:ml-auto">
                     {attention > 0 && (
-                      <span className="whitespace-nowrap bg-warn px-1.5 text-xs font-semibold leading-5 text-warn-foreground">
+                      <span className="whitespace-nowrap rounded-full bg-warn px-2 text-xs font-semibold leading-5 text-warn-foreground">
                         {attention} need{attention === 1 ? "s" : ""} attention
                       </span>
                     )}
                     {urgentCount > 0 && (
-                      <span className="whitespace-nowrap bg-attention px-1.5 text-xs font-semibold leading-5 text-attention-foreground">
+                      <span className="whitespace-nowrap rounded-full bg-attention px-2 text-xs font-semibold leading-5 text-attention-foreground">
                         {urgentCount} urgent
                       </span>
                     )}
@@ -258,7 +258,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
                         href={`/rooms/${r.id}`}
                         title={label}
                         aria-label={label}
-                        className={`relative flex h-16 flex-col justify-between rounded-md border px-2 py-1.5 transition-opacity hover:ring-2 hover:ring-brand sm:h-[4.5rem] ${SLOT[r.status]} ${
+                        className={`relative flex h-16 flex-col justify-between rounded-lg border px-2 py-1.5 transition hover:-translate-y-0.5 hover:shadow-pop hover:ring-2 hover:ring-brand sm:h-[4.5rem] ${SLOT[r.status]} ${
                           flagged ? "ring-[3px] ring-warn ring-offset-1 ring-offset-surface" : ""
                         } ${blocked ? "ring-2 ring-attention" : ""} ${dim ? "opacity-20" : ""}`}
                       >
@@ -289,7 +289,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
           };
         })}
       />
-      <div className="mt-4 border border-border bg-surface p-3 sm:p-5">
+      <div className="mt-4 rounded-xl border border-border bg-surface p-4 shadow-card sm:p-5">
         <BoardKey types={types} />
       </div>
     </>

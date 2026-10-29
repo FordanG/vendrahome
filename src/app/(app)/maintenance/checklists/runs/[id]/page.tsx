@@ -61,7 +61,7 @@ export default async function ChecklistRunPage({ params }: PageProps<"/maintenan
                     <p className="text-sm font-medium">{r.label}</p>
                     <div className="grid grid-cols-3 gap-2 sm:max-w-sm" role="radiogroup" aria-label={r.label}>
                       {(Object.keys(RESULT_LABELS) as (keyof typeof RESULT_LABELS)[]).map((k) => (
-                        <label key={k} className="flex min-h-11 cursor-pointer items-center justify-center gap-2 border border-border px-2 text-sm has-checked:border-brand has-checked:bg-background sm:min-h-9">
+                        <label key={k} className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border px-2 text-sm has-checked:border-brand has-checked:bg-background sm:min-h-9">
                           <input type="radio" name={`result_${i}`} value={k} defaultChecked={r.result === k} />
                           {RESULT_LABELS[k]}
                         </label>

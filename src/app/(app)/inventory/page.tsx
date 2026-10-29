@@ -51,7 +51,7 @@ export default async function InventoryPage() {
       {(empty === rooms.length && rooms.length > 0) && (
         <Card className="mb-6 text-sm">
           No room has items yet. {CAN.manageRooms.includes(user.role)
-            ? <>Start with the <Link className="underline" href="/inventory/templates">standard list for each room type</Link>, then add it to every room in one step.</>
+            ? <>Start with the <Link className="link" href="/inventory/templates">standard list for each room type</Link>, then add it to every room in one step.</>
             : "Ask the admin to set up the standard list for each room type."}
         </Card>
       )}
@@ -63,7 +63,7 @@ export default async function InventoryPage() {
             <ul className="divide-y divide-border text-sm">
               {problems.slice(0, 12).map(({ item, roomNumber }) => (
                 <li key={item.id} className="flex items-center justify-between gap-3 py-2">
-                  <Link className="underline underline-offset-2" href={item.roomId ? `/inventory/rooms/${item.roomId}#item-${item.id}` : "/inventory/rooms/storeroom"}>
+                  <Link className="link" href={item.roomId ? `/inventory/rooms/${item.roomId}#item-${item.id}` : "/inventory/rooms/storeroom"}>
                     {roomNumber ? `Room ${roomNumber}` : "Storeroom"}: {item.name}
                   </Link>
                   <Badge tone={CONDITION_TONES[item.condition]}>{CONDITION_LABELS[item.condition]}</Badge>
@@ -79,7 +79,7 @@ export default async function InventoryPage() {
             <ul className="divide-y divide-border text-sm">
               {service.slice(0, 12).map(({ item, roomNumber, due }) => (
                 <li key={item.id} className="flex items-center justify-between gap-3 py-2">
-                  <Link className="underline underline-offset-2" href={item.roomId ? `/inventory/rooms/${item.roomId}#item-${item.id}` : "/inventory/rooms/storeroom"}>
+                  <Link className="link" href={item.roomId ? `/inventory/rooms/${item.roomId}#item-${item.id}` : "/inventory/rooms/storeroom"}>
                     {roomNumber ? `Room ${roomNumber}` : "Storeroom"}: {item.name}
                   </Link>
                   <span className={due < today ? "text-attention" : "text-muted"}>{due < today ? `Was due ${formatDate(due)}` : formatDate(due)}</span>
@@ -98,7 +98,7 @@ export default async function InventoryPage() {
                 {noStartCheck.slice(0, 40).map((r, i) => (
                   <span key={r.roomId}>
                     {i > 0 && ", "}
-                    <Link className="underline underline-offset-2" href={`/inventory/rooms/${r.roomId}#check`}>{r.number}</Link>
+                    <Link className="link" href={`/inventory/rooms/${r.roomId}#check`}>{r.number}</Link>
                   </span>
                 ))}
                 {noStartCheck.length > 40 && ` and ${noStartCheck.length - 40} more`}

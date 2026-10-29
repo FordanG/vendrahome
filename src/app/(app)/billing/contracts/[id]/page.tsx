@@ -45,7 +45,7 @@ export default async function CompanyAccountPage({ params }: PageProps<"/billing
         subtitle={
           <span className="inline-flex flex-wrap items-center gap-2">
             <StatusBadge balance={account.balance} overdue={account.overdue} />
-            <Link className="underline underline-offset-2" href={`/contracts/${contract.id}`}>Contract {contract.reference}</Link>
+            <Link className="link" href={`/contracts/${contract.id}`}>Contract {contract.reference}</Link>
             <span>{formatDate(contract.startDate)} to {formatDate(contract.endDate)}</span>
           </span>
         }
@@ -143,7 +143,7 @@ export default async function CompanyAccountPage({ params }: PageProps<"/billing
                 <tbody>
                   {[...account.statements].reverse().map((s) => (
                     <tr key={s.id}>
-                      <Td primary><Link className="font-medium underline underline-offset-2" href={`/billing/statements/${s.id}`}>{s.number}</Link></Td>
+                      <Td primary><Link className="font-medium link" href={`/billing/statements/${s.id}`}>{s.number}</Link></Td>
                       <Td label="Period">{formatDate(s.periodStart)} – {formatDate(s.periodEnd)}</Td>
                       <Td label="Due">{formatDate(s.dueDate)}</Td>
                       <Td label="Balance due" className="text-right tabular-nums">{formatPeso(s.balanceDue)}</Td>

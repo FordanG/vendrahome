@@ -114,7 +114,7 @@ function RoomRow({ r, view, on, today, q, sharedLease, oneCompany }: { r: AvailR
   return (
     <li className="px-4 py-3 sm:grid sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] sm:gap-6">
       <Link href={`/rooms/${r.id}`} className="flex min-h-12 min-w-0 gap-3">
-        <span className={`plate flex h-12 w-14 shrink-0 items-center justify-center border text-lg font-bold ${plateFor(key, today, r.condition === "not_available")}`}>
+        <span className={`plate flex h-12 w-14 shrink-0 items-center justify-center rounded-lg border text-lg font-bold ${plateFor(key, today, r.condition === "not_available")}`}>
           <span className="sr-only">Room </span>
           {r.number}
         </span>
@@ -353,7 +353,7 @@ export default async function AvailabilityPage({ searchParams }: PageProps<"/ava
       {(filtered || on) && (
         <p className="mb-3 text-sm text-muted">
           {on && <>Showing {formatDate(on)}. </>}
-          <Link href={clearHref} className="underline underline-offset-2 hover:text-foreground">
+          <Link href={clearHref} className="link hover:text-foreground">
             Clear {on && filtered ? "date and filters" : on ? "date" : "filters"}
           </Link>
         </p>
@@ -367,8 +367,8 @@ export default async function AvailabilityPage({ searchParams }: PageProps<"/ava
               key={t.view}
               href={isActive ? href("all") : href(t.view)}
               aria-current={isActive ? "page" : undefined}
-              className={`flex min-h-14 items-center gap-2.5 border px-2.5 py-2 transition-colors sm:min-h-20 sm:flex-col sm:items-stretch sm:justify-between sm:gap-0 sm:py-3 ${
-                isActive ? "border-foreground bg-accent text-accent-foreground" : "border-border bg-surface hover:border-muted/60"
+              className={`flex min-h-14 items-center gap-2.5 rounded-xl border px-3 py-2 shadow-card transition sm:min-h-20 sm:px-4 sm:flex-col sm:items-stretch sm:justify-between sm:gap-0 sm:py-3 ${
+                isActive ? "border-accent bg-accent text-accent-foreground" : "border-border bg-surface hover:border-field-border"
               }`}
             >
               <span className="plate shrink-0 text-2xl font-bold leading-none sm:hidden">{t.count}</span>
@@ -393,7 +393,7 @@ export default async function AvailabilityPage({ searchParams }: PageProps<"/ava
           {sharedLease && (
             <>
               , {shown.length === 1 ? "leased" : "all leased"} to{" "}
-              <Link href={`/contracts/${sharedLease.id}`} className="text-foreground underline underline-offset-2">
+              <Link href={`/contracts/${sharedLease.id}`} className="text-foreground link">
                 {sharedLease.clientName}
               </Link>{" "}
               until {formatDate(sharedLease.endDate)}.
@@ -401,7 +401,7 @@ export default async function AvailabilityPage({ searchParams }: PageProps<"/ava
           )}
         </p>
         {active !== "all" && (
-          <Link href={href("all")} className="underline underline-offset-2">
+          <Link href={href("all")} className="link">
             Show all rooms
           </Link>
         )}
@@ -423,7 +423,7 @@ export default async function AvailabilityPage({ searchParams }: PageProps<"/ava
                 {g.label}
                 <span className="plate font-bold text-muted">{g.rooms.length}</span>
               </h2>
-              <ul className="divide-y divide-border border border-border bg-surface">
+              <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface shadow-card">
                 {g.rooms.map((r) => (
                   <RoomRow key={r.id} r={r} view={active} on={on} today={today} q={q} sharedLease={!!sharedLease} oneCompany={oneCompany} />
                 ))}

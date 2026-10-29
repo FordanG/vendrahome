@@ -57,15 +57,15 @@ export function FloorFolds({ floors }: { floors: FloorFold[] }) {
         <button
           type="button"
           onClick={() => write(allOpen ? [] : floors.map((f) => f.id))}
-          className="min-h-10 px-1 text-sm text-muted underline underline-offset-2 hover:text-foreground sm:min-h-0"
+          className="min-h-10 rounded-md px-2 text-sm font-medium text-muted transition-colors hover:bg-foreground/5 hover:text-foreground sm:min-h-8"
         >
           {allOpen ? "Fold all floors" : "Open all floors"}
         </button>
       </div>
-      <div className="divide-y divide-border border border-border bg-surface">
+      <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface shadow-card">
         {floors.map((f) => (
           <details key={f.id} open={open.has(f.id)} onToggle={(e) => setOpen(f.id, e.currentTarget.open)} className="group">
-            <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-3 hover:bg-background/60 sm:px-5 [&::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-3.5 transition-colors hover:bg-subtle sm:px-5 [&::-webkit-details-marker]:hidden">
               <svg
                 viewBox="0 0 24 24"
                 className="size-5 shrink-0 text-muted transition-transform group-open:rotate-90"

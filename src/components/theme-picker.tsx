@@ -8,15 +8,15 @@ export async function ThemePicker() {
   return (
     <Card className="max-w-md">
       <SectionTitle>Light or dark</SectionTitle>
-      <form action={setTheme} className="flex border border-border bg-background p-0.5 text-sm" role="group" aria-label="Light or dark">
+      <form action={setTheme} className="flex rounded-xl bg-foreground/[0.06] p-1 text-sm" role="group" aria-label="Light or dark">
         {THEMES.map((t) => (
           <button
             key={t}
             name="theme"
             value={t}
             aria-pressed={current === t}
-            className={`flex min-h-11 flex-1 items-center justify-center whitespace-nowrap px-3 py-1.5 transition-colors sm:min-h-9 ${
-              current === t ? "bg-accent font-medium text-accent-foreground" : "text-muted hover:text-foreground"
+            className={`flex min-h-11 flex-1 items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 transition sm:min-h-9 ${
+              current === t ? "bg-surface font-medium text-foreground shadow-card" : "text-muted hover:text-foreground"
             }`}
           >
             {THEME_LABELS[t]}

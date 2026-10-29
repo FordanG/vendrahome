@@ -26,9 +26,9 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
       {log.detail != null && <details className="mt-2 text-sm"><summary className="cursor-pointer">Change details</summary><pre className="mt-2 max-w-full overflow-x-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(log.detail, null, 2)}</pre></details>}
     </Card>)}</div>
     <nav aria-label="Audit pages" className="mt-5 flex gap-5">
-      {page > 1 && <Link className="underline" href={`/audit?page=${page - 1}`}>Previous</Link>}
+      {page > 1 && <Link className="link" href={`/audit?page=${page - 1}`}>Previous</Link>}
       {total > 50 && <span>Page {page} of {Math.ceil(total / 50)}</span>}
-      {page * 50 < total && <Link className="underline" href={`/audit?page=${page + 1}`}>Next</Link>}
+      {page * 50 < total && <Link className="link" href={`/audit?page=${page + 1}`}>Next</Link>}
     </nav>
   </>;
 }

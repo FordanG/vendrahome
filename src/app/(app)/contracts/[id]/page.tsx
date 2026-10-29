@@ -87,14 +87,14 @@ export default async function ContractPage({ params }: PageProps<"/contracts/[id
         subtitle={
           <span className="inline-flex flex-wrap items-center gap-2">
             <Badge tone={CONTRACT_STATUS_TONES[contract.status]}>{CONTRACT_STATUS_LABELS[contract.status]}</Badge>
-            <Link className="underline" href={`/clients/${contract.clientId}`}>
+            <Link className="link" href={`/clients/${contract.clientId}`}>
               {client?.name}
             </Link>
             <span>
               {contractRooms.length} rooms, {formatDate(contract.startDate)} to {formatDate(contract.endDate)}
             </span>
             {contract.status !== "draft" && CAN.viewBilling.includes(user.role) && (
-              <Link className="underline" href={`/billing/contracts/${contract.id}`}>
+              <Link className="link" href={`/billing/contracts/${contract.id}`}>
                 Statements and payments
               </Link>
             )}

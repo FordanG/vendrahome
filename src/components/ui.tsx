@@ -19,15 +19,18 @@ export function PageHeader({
       {back && (
         <Link
           href={back.href}
-          className="no-print -ml-1 inline-flex min-h-11 items-center px-1 text-sm text-muted hover:text-foreground sm:min-h-0"
+          className="no-print -ml-1 inline-flex min-h-11 items-center gap-1 rounded-md px-1 text-sm text-muted transition-colors hover:text-foreground sm:min-h-0 sm:py-0.5"
         >
-          ← {back.label}
+          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+            <path d="m15 6-6 6 6 6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {back.label}
         </Link>
       )}
       <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="plate text-[1.75rem] font-bold leading-tight sm:text-3xl">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+          <h1 className="plate text-[1.75rem] font-bold leading-tight tracking-tight sm:text-[2rem]">{title}</h1>
+          {subtitle && <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-muted">{subtitle}</p>}
         </div>
         {/* Phones: actions share a full-width row, each as wide as its words, so they are easy to reach. */}
         {actions && (
@@ -41,7 +44,7 @@ export function PageHeader({
 export function Card({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
-      className={cx("rounded-xl border border-border bg-surface p-4 sm:p-5", className)}
+      className={cx("rounded-xl border border-border bg-surface p-4 shadow-card sm:p-5", className)}
       {...props}
     />
   );
@@ -50,7 +53,7 @@ export function Card({ className, ...props }: ComponentProps<"div">) {
 export function SectionTitle({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-2">
-      <h2 className="text-[15px] font-semibold">{children}</h2>
+      <h2 className="text-base font-semibold tracking-tight">{children}</h2>
       {actions}
     </div>
   );
@@ -58,12 +61,12 @@ export function SectionTitle({ children, actions }: { children: ReactNode; actio
 
 // Phones get 44px-tall tap targets; wider screens keep the compact size.
 const buttonBase =
-  "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium active:opacity-80 sm:min-h-0 sm:px-3.5 transition-colors disabled:opacity-50 disabled:pointer-events-none";
+  "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium active:scale-[0.98] sm:min-h-9 sm:px-3.5 transition disabled:opacity-50 disabled:pointer-events-none";
 const variants = {
-  primary: "bg-accent text-accent-foreground hover:bg-brand hover:text-brand-foreground",
-  secondary: "border border-border bg-surface hover:border-accent/40 hover:bg-background",
-  danger: "border border-attention/40 bg-surface text-attention hover:bg-attention/10",
-  ghost: "text-muted hover:text-foreground hover:bg-background",
+  primary: "bg-accent text-accent-foreground shadow-card hover:bg-brand hover:text-brand-foreground",
+  secondary: "border border-border bg-surface shadow-card hover:border-field-border hover:bg-subtle",
+  danger: "border border-attention/30 bg-surface text-attention shadow-card hover:bg-attention/10",
+  ghost: "text-muted hover:text-foreground hover:bg-foreground/5",
 };
 type Variant = keyof typeof variants;
 
@@ -85,7 +88,7 @@ export function LinkButton({
 
 // 16px text on phones: smaller text makes iPhones zoom in when a field is tapped.
 const inputBase =
-  "min-h-11 rounded-md border border-field-border bg-field px-3 py-2 text-base outline-none sm:min-h-0 sm:text-sm transition-colors focus:border-brand focus:ring-2 focus:ring-brand/25";
+  "min-h-11 rounded-lg border border-field-border bg-field px-3 py-2 text-base shadow-[inset_0_1px_2px_rgb(0_0_0/0.04)] outline-none placeholder:text-muted/70 sm:min-h-9 sm:text-sm transition focus:border-brand focus:ring-4 focus:ring-brand/15";
 // Full width unless the caller sets its own width (e.g. "w-40").
 const inputClass = (className?: string) => cx(inputBase, !/(^|\s)w-/.test(className ?? "") && "w-full", className);
 
@@ -114,7 +117,7 @@ export function Field({
 }) {
   return (
     <label className={cx("block", className)}>
-      <span className="mb-1 block text-sm font-medium">{label}</span>
+      <span className="mb-1.5 block text-sm font-medium">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
     </label>
@@ -126,17 +129,17 @@ export function FormGrid({ children }: { children: ReactNode }) {
 }
 
 const tones = {
-  gray: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-  green: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
-  blue: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300",
-  amber: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-  red: "bg-attention/12 text-attention",
+  gray: "bg-stone-100 text-stone-700 ring-stone-500/15 dark:bg-white/8 dark:text-stone-300 dark:ring-white/10",
+  green: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/20",
+  blue: "bg-sky-50 text-sky-700 ring-sky-600/20 dark:bg-sky-400/10 dark:text-sky-300 dark:ring-sky-400/20",
+  amber: "bg-amber-50 text-amber-800 ring-amber-600/25 dark:bg-amber-400/10 dark:text-amber-300 dark:ring-amber-400/20",
+  red: "bg-attention/8 text-attention ring-attention/25",
 };
 export type Tone = keyof typeof tones;
 
 export function Badge({ tone = "gray", children }: { tone?: Tone; children: ReactNode }) {
   return (
-    <span className={cx("inline-flex items-center px-2 py-0.5 text-xs font-medium", tones[tone])}>
+    <span className={cx("inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset", tones[tone])}>
       {children}
     </span>
   );
@@ -148,15 +151,15 @@ export function Badge({ tone = "gray", children }: { tone?: Tone; children: Reac
  */
 export function Table({ children }: { children: ReactNode }) {
   return (
-    <div className="rtable overflow-hidden rounded-xl border border-border bg-surface sm:overflow-x-auto">
-      <table className="w-full text-left text-sm">{children}</table>
+    <div className="rtable overflow-hidden rounded-xl border border-border bg-surface shadow-card sm:overflow-x-auto">
+      <table className="w-full text-left text-sm sm:[&_tbody_tr:hover]:bg-subtle sm:[&_tbody_tr:last-child>td]:border-b-0">{children}</table>
     </div>
   );
 }
 
 export function Th({ children, className }: { children?: ReactNode; className?: string }) {
   return (
-    <th className={cx("border-b border-border bg-background/60 px-3 py-2 text-xs font-medium text-muted", className)}>
+    <th className={cx("border-b border-border bg-subtle px-4 py-2.5 text-xs font-medium text-muted", className)}>
       {children}
     </th>
   );
@@ -183,7 +186,7 @@ export function Td({
       data-label={label}
       data-primary={primary || undefined}
       data-wide={wide || undefined}
-      className={cx("border-b border-border px-3 py-2 align-top", className)}
+      className={cx("border-b border-border px-4 py-3 align-top transition-colors", className)}
     >
       {children}
     </td>
@@ -191,7 +194,7 @@ export function Td({
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted">{children}</p>;
+  return <p className="rounded-xl border border-dashed border-field-border/60 bg-surface/50 px-6 py-10 text-center text-sm text-muted">{children}</p>;
 }
 
 /** A labelled value. Blank values read "Not set" (or `empty`) instead of a bare dash. */
@@ -207,19 +210,21 @@ export function Detail({ label, children, empty = "Not set" }: { label: string; 
 /** A row of view links, e.g. Open / Waiting / Closed. */
 export function ViewTabs({ items }: { items: { href: string; label: string; count?: number; active: boolean }[] }) {
   return (
-    <nav className="no-print flex max-w-full overflow-x-auto rounded-lg border border-border bg-surface p-0.5 text-sm sm:inline-flex">
+    <nav className="no-print flex max-w-full overflow-x-auto rounded-xl bg-foreground/[0.06] p-1 text-sm sm:inline-flex">
       {items.map((i) => (
         <Link
           key={i.href}
           href={i.href}
           aria-current={i.active ? "page" : undefined}
           className={cx(
-            "flex min-h-10 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 transition-colors sm:min-h-0 sm:flex-none",
-            i.active ? "bg-accent font-medium text-accent-foreground" : "text-muted hover:text-foreground",
+            "flex min-h-10 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 transition sm:min-h-0 sm:flex-none",
+            i.active ? "bg-surface font-medium text-foreground shadow-card" : "text-muted hover:text-foreground",
           )}
         >
           {i.label}
-          {i.count != null && <span className={cx("plate font-bold", !i.active && "text-foreground")}>{i.count}</span>}
+          {i.count != null && (
+            <span className={cx("plate rounded-full px-1.5 text-xs font-bold leading-5", i.active ? "bg-foreground/[0.08]" : "text-foreground")}>{i.count}</span>
+          )}
         </Link>
       ))}
     </nav>

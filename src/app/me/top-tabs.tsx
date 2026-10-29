@@ -8,7 +8,7 @@ import { isActive, type NavLink } from "../(app)/nav-links";
 export function TopTabs({ items }: { items: NavLink[] }) {
   const pathname = usePathname();
   return (
-    <nav className="hidden gap-1 px-4 md:flex">
+    <nav className="hidden items-center gap-1 md:flex">
       {items.map((item) => {
         const active = isActive(pathname, item.href, true);
         return (
@@ -16,10 +16,10 @@ export function TopTabs({ items }: { items: NavLink[] }) {
             key={item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
-            className={`whitespace-nowrap border-b-2 px-3 pb-2.5 pt-1 text-sm transition-colors ${
+            className={`flex items-center whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm transition-colors ${
               active
-                ? "border-brand font-medium text-sidebar-foreground"
-                : "border-transparent text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                ? "bg-white/[0.12] font-medium text-sidebar-foreground"
+                : "text-sidebar-foreground/65 hover:bg-white/[0.06] hover:text-sidebar-foreground"
             }`}
           >
             {item.label}

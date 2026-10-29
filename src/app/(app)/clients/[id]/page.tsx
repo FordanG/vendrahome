@@ -73,7 +73,7 @@ export default async function ClientPage({ params }: PageProps<"/clients/[id]">)
                   {contracts.map((c) => (
                     <tr key={c.id}>
                       <Td primary>
-                        <Link className="font-medium underline" href={`/contracts/${c.id}`}>
+                        <Link className="font-medium link" href={`/contracts/${c.id}`}>
                           {c.reference}
                         </Link>
                       </Td>
@@ -139,7 +139,7 @@ export default async function ClientPage({ params }: PageProps<"/clients/[id]">)
                     ))}
                   </ul>
                   <details open={logins.length === 0}>
-                    <summary className="cursor-pointer text-sm underline underline-offset-2">Add a company login</summary>
+                    <summary className="cursor-pointer text-sm link">Add a company login</summary>
                     <ActionForm action={createCompanyLogin.bind(null, client.id)} submitLabel="Add login" resetOnSuccess className="mt-3 space-y-3">
                       <Field label="Name">
                         <Input name="name" defaultValue={logins.length === 0 ? client.contactName ?? "" : ""} required />
