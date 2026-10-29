@@ -1,4 +1,4 @@
-# Hosting: Supabase database, Netlify app
+# Hosting: Supabase database, Vercel app
 
 The app runs on one of two databases, chosen by one setting:
 
