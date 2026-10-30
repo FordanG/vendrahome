@@ -41,9 +41,9 @@ function BoardKey({ types }: { types: (string | null)[] }) {
         <div className="flex items-center gap-2.5">
           <dt className={`${example} ${SLOT.occupied}`} aria-hidden>
             <span className="plate text-[11px] font-bold leading-none">305</span>
-            <span className="text-[9px] font-semibold leading-none">1 free</span>
+            <span className="self-start rounded-full bg-emerald-600 px-1 text-[9px] font-semibold leading-3 text-white">1 free</span>
           </dt>
-          <dd>Beds ready to assign under the current contract, after reservations.</dd>
+          <dd>Green tag: beds ready to assign under the current contract, after reservations.</dd>
         </div>
         <div className="flex items-center gap-2.5">
           <dt className={`${example} ${SLOT.occupied} ring-[3px] ring-warn ring-offset-1 ring-offset-surface`} aria-hidden>
@@ -277,7 +277,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
                           {types.length > 1 && <span className="block truncate opacity-90">{shortType(r.typeName)}</span>}
                           {blocked && <span className="block font-semibold">Blocked</span>}
                           {r.assignableBeds > 0 && (
-                            <span className="block whitespace-nowrap font-semibold">{r.assignableBeds} free</span>
+                            <span className="mt-0.5 inline-block whitespace-nowrap rounded-full bg-emerald-600 px-1.5 font-semibold leading-4 text-white">{r.assignableBeds} free</span>
                           )}
                         </span>
                       </Link>
