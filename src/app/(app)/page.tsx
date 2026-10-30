@@ -8,7 +8,7 @@ import { getRoomBoard, STATUS_LABELS, type RoomStatus } from "@/lib/rooms";
 import { STATUS_HELP } from "@/lib/room-status";
 import { addDaysISO, daysBetween, formatDate, todayISO } from "@/lib/format";
 import { SLOT, SWATCH } from "@/components/list";
-import { LinkButton, PageHeader } from "@/components/ui";
+import { Badge, LinkButton, PageHeader } from "@/components/ui";
 import { FloorFolds } from "./floor-folds";
 
 // The board reads like a front desk key rack: one fold per floor, one slot per room.
@@ -26,41 +26,53 @@ const matches = (r: { status: RoomStatus; needsWork: boolean }, s: RoomStatus) =
 function BoardKey({ types }: { types: (string | null)[] }) {
   // Room types only show on the slots when there is more than one.
   const showTypes = types.length > 1;
-  const example = "relative flex h-9 w-12 shrink-0 flex-col justify-between rounded-md border px-1 py-0.5";
+  const example = "relative flex h-10 w-12 shrink-0 flex-col justify-between rounded-lg border px-1.5 py-1";
   return (
     <div>
-      <h2 className="mb-2 text-sm font-semibold">How to read a room</h2>
-      <dl className="grid gap-x-6 gap-y-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
-        <div className="flex items-center gap-2.5">
+      <h2 className="mb-3 text-sm font-semibold">How to read a room</h2>
+      <dl className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+        <div className="flex items-center gap-3">
           <dt className={`${example} ${SLOT.occupied}`} aria-hidden>
-            <span className="plate text-[11px] font-bold leading-none">203</span>
-            {showTypes && <span className="text-[9px] leading-none">Twin</span>}
+            <span className="plate text-xs font-bold leading-none">203</span>
+            {showTypes && <span className="text-[9px] leading-none opacity-90">Twin</span>}
           </dt>
-          <dd>{showTypes ? "Room number and room type." : "Room number."} Filled in means someone lives there.</dd>
+          <dd>
+            <span className="block font-medium">Someone lives here</span>
+            <span className="block text-xs text-muted">{showTypes ? "Room number and type" : "Room number"}</span>
+          </dd>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <dt className={`${example} ${SLOT.occupied}`} aria-hidden>
-            <span className="plate text-[11px] font-bold leading-none">305</span>
+            <span className="plate text-xs font-bold leading-none">305</span>
             <span className="self-start rounded-full bg-emerald-600 px-1 text-[9px] font-semibold leading-3 text-white">1 free</span>
           </dt>
-          <dd>Green tag: beds ready to assign under the current contract, after reservations.</dd>
+          <dd>
+            <span className="block font-medium">Beds free to assign</span>
+            <span className="block text-xs text-muted">Under the current contract</span>
+          </dd>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <dt className={`${example} ${SLOT.occupied} ring-[3px] ring-warn ring-offset-1 ring-offset-surface`} aria-hidden>
-            <span className="plate text-[11px] font-bold leading-none">110</span>
+            <span className="plate text-xs font-bold leading-none">110</span>
           </dt>
-          <dd>Yellow border: the room needs attention (a repair, cleaning, or an open request).</dd>
+          <dd>
+            <span className="block font-medium">Needs attention</span>
+            <span className="block text-xs text-muted">A repair, cleaning or open request</span>
+          </dd>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <dt className="flex w-12 shrink-0 justify-center gap-1" aria-hidden>
             <span className="rounded-full bg-warn px-1.5 text-[10px] font-bold leading-4 text-warn-foreground">2</span>
             <span className="rounded-full bg-attention px-1.5 text-[10px] font-bold leading-4 text-attention-foreground">1</span>
           </dt>
-          <dd>Number of open requests from tenants. Red means one is urgent.</dd>
+          <dd>
+            <span className="block font-medium">Open requests</span>
+            <span className="block text-xs text-muted">Red means one is urgent</span>
+          </dd>
         </div>
       </dl>
       {showTypes && (
-        <p className="mt-3 text-xs text-muted">
+        <p className="mt-4 border-t border-border pt-3 text-xs text-muted">
           Room types: {types.map((t) => (shortType(t) === t ? t : `${t} (shown as ${shortType(t)})`)).join(", ")}.
         </p>
       )}
@@ -189,39 +201,40 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
           const rooms = all.filter((r) => r.floor === f);
           const lived = rooms.filter((r) => r.status === "occupied").length;
           const freeBeds = rooms.reduce((n, r) => n + r.assignableBeds, 0);
-          const attention = rooms.filter((r) => r.needsWork).length;
-          const urgentCount = rooms.reduce((n, r) => n + r.openRequests.filter((q) => q.urgent).length, 0);
+          const flaggedRooms = rooms
+            .map((r) => ({ id: r.id, number: r.number, urgent: r.openRequests.some((q) => q.urgent), flagged: r.needsWork }))
+            .filter((r) => r.urgent || r.flagged)
+            .sort((x, y) => Number(y.urgent) - Number(x.urgent));
           return {
             id: String(f),
-            // Folded, a floor still shows its rooms as a row of small squares, so nothing needing attention is hidden.
+            // Folded, a floor shows how full it is and names the rooms that need someone, urgent first.
             summary: (
               <>
                 <span className="plate w-16 shrink-0 text-lg font-bold">Floor {f}</span>
-                <span className="flex flex-wrap gap-1 group-open:hidden" aria-hidden>
-                  {rooms.map((r) => (
-                    <span
-                      key={r.id}
-                      className={`size-3 rounded-[3px] ${SWATCH[r.status]} ${r.needsWork && r.status !== "needs_work" ? "ring-2 ring-warn" : ""} ${
-                        status && !matches(r, status) ? "opacity-20" : ""
-                      }`}
-                    />
-                  ))}
-                </span>
-                <span className="text-sm text-muted">
-                  {lived} of {rooms.length} rooms occupied, {freeBeds} bed{freeBeds === 1 ? "" : "s"} free
-                </span>
-                {(attention > 0 || urgentCount > 0) && (
-                  <span className="flex gap-1.5 sm:ml-auto">
-                    {attention > 0 && (
-                      <span className="whitespace-nowrap rounded-full bg-warn px-2 text-xs font-semibold leading-5 text-warn-foreground">
-                        {attention} need{attention === 1 ? "s" : ""} attention
-                      </span>
+                <span className="flex items-center gap-3">
+                  <span className="h-1.5 w-20 overflow-hidden rounded-full bg-foreground/10 sm:w-28" aria-hidden>
+                    <span className="block h-full rounded-full bg-occupied ring-1 ring-inset ring-foreground/10" style={{ width: `${(lived / rooms.length) * 100}%` }} />
+                  </span>
+                  <span className="whitespace-nowrap text-sm text-muted">
+                    <span className="font-medium text-foreground">{lived} of {rooms.length}</span> occupied
+                    {freeBeds > 0 && (
+                      <>
+                        , <span className="font-medium text-emerald-700 dark:text-emerald-400">{freeBeds} bed{freeBeds === 1 ? "" : "s"} free</span>
+                      </>
                     )}
-                    {urgentCount > 0 && (
-                      <span className="whitespace-nowrap rounded-full bg-attention px-2 text-xs font-semibold leading-5 text-attention-foreground">
-                        {urgentCount} urgent
-                      </span>
-                    )}
+                    {status && <>, {rooms.filter((r) => matches(r, status)).length} {STATUS_LABELS[status].toLowerCase()}</>}
+                  </span>
+                </span>
+                {flaggedRooms.length > 0 && (
+                  <span className="flex flex-wrap gap-1.5 sm:ml-auto">
+                    {flaggedRooms.slice(0, 4).map((r) => (
+                      <Badge key={r.id} tone={r.urgent ? "red" : "amber"}>
+                        <span className={`mr-1.5 size-1.5 rounded-full ${r.urgent ? "bg-attention" : "bg-warn"}`} aria-hidden />
+                        Room {r.number}
+                        {r.urgent ? ", urgent" : ""}
+                      </Badge>
+                    ))}
+                    {flaggedRooms.length > 4 && <Badge>{flaggedRooms.length - 4} more</Badge>}
                   </span>
                 )}
               </>
