@@ -86,7 +86,7 @@ export default async function HousekeepingPage() {
                           {c.steps.filter((s) => s.done).length} of {c.steps.length} steps done
                         </span>
                       </span>
-                      {!c.checkInId && <Badge tone="amber">Not scanned</Badge>}
+                      {!c.checkInId && <Badge tone="amber">Door code not scanned</Badge>}
                     </Link>
                   </li>
                 ))}

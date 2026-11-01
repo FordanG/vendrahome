@@ -78,7 +78,7 @@ export default async function ChecklistsPage({ searchParams }: PageProps<"/maint
                         {run.results.filter((r) => r.result).length} of {run.results.length}
                         {name && `, ${name}`}
                       </span>
-                      {!run.checkInId && <Badge tone="amber">Not scanned</Badge>}
+                      {!run.checkInId && <Badge tone="amber">Door code not scanned</Badge>}
                     </Link>
                   </li>
                 ))}
@@ -146,7 +146,7 @@ export default async function ChecklistsPage({ searchParams }: PageProps<"/maint
                           <span className="text-muted">, {formatMoment(run.finishedAt!)}{name && `, ${name}`}</span>
                         </span>
                         {problems > 0 && <Badge tone="red">{problems} {problems === 1 ? "problem" : "problems"}</Badge>}
-                        {!run.checkInId && <Badge tone="amber">Not scanned</Badge>}
+                        {!run.checkInId && <Badge tone="amber">Door code not scanned</Badge>}
                       </Link>
                     </li>
                   );

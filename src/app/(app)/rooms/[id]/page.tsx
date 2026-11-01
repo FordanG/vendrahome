@@ -20,6 +20,11 @@ import { qrSvg, roomScanUrl } from "@/lib/room-qr";
 import { everyLabel, lastCleanedLabel, roomCleaning } from "@/lib/housekeeping";
 import { RoomFields } from "../room-fields";
 
+/** Starting here skips the door code, so the app can't confirm anyone was at the room. */
+const DoorNote = () => (
+  <span className="mt-1.5 block text-xs text-muted">Not at the door? Starting here marks it as not checked in at the room.</span>
+);
+
 export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
   const user = await requireStaff();
   const { id } = await params;
@@ -120,7 +125,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
                               "use server";
                               return startRunHere(room.id, c.checklist.id);
                             }}
-                            submitLabel="Start without scanning"
+                            submitLabel="Start check"
                             pendingLabel="Opening…"
                             submitVariant="secondary"
                             className="mt-1"
@@ -129,6 +134,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
                       </li>
                     ))}
                   </ul>
+                  {checklists.some((c) => c.due <= today) && <DoorNote />}
                 </Detail>
               )}
               <Detail label="Cleaning">
@@ -143,12 +149,13 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
                       "use server";
                       return startCleaningHere(room.id);
                     }}
-                    submitLabel="Clean without scanning"
+                    submitLabel="Start cleaning"
                     pendingLabel="Opening…"
                     submitVariant="secondary"
                     className="mt-2"
                   />
                 )}
+                {CAN.cleanRooms.includes(user.role) && <DoorNote />}
               </Detail>
             </dl>
             <div className="mt-4 space-y-2">
