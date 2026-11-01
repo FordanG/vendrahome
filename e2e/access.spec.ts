@@ -102,7 +102,7 @@ test("personal data by role", async ({ browser }) => {
     await fix.goto(roomPage);
     // On the room itself they see who lives there, but not the stay history or links to personal details
     await expect(fix.getByText(RESIDENT.name).first()).toBeVisible();
-    await expect(fix.getByText("Everyone who has stayed here")).toHaveCount(0);
+    await expect(fix.getByText("Past tenants")).toHaveCount(0);
     await expect(fix.locator("a[href^='/occupants/']")).toHaveCount(0);
     expect(await fix.content()).not.toContain("9999-8888-7777");
   });

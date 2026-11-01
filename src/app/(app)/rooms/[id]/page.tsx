@@ -11,18 +11,18 @@ import { bedsTaken, formatDate, todayISO } from "@/lib/format";
 import { StayCell } from "@/components/stay";
 import { REQUEST_KIND_LABELS, REQUEST_STATUS_TONES, requestStatusLabel } from "@/lib/portal";
 import { ActionForm } from "@/components/action-form";
-import { Badge, Card, Detail, Empty, Field, Input, PageHeader, SectionTitle, Select, Table, Td, Th } from "@/components/ui";
+import { Badge, Card, Detail, Empty, Field, PageHeader, SectionTitle, Select, Table, Td, Th } from "@/components/ui";
 import { startCleaningHere } from "../../housekeeping/actions";
 import { startRunHere } from "../../maintenance/checklists/actions";
 import { roomChecklists } from "@/lib/checklists";
-import { deleteRoom, replaceDoorCode, setPeopleAllowed, setRoomCondition, updateRoom } from "../actions";
+import { deleteRoom, replaceDoorCode, setRoomCondition, updateRoom } from "../actions";
 import { qrSvg, roomScanUrl } from "@/lib/room-qr";
 import { everyLabel, lastCleanedLabel, roomCleaning } from "@/lib/housekeeping";
 import { RoomFields } from "../room-fields";
 
 /** Starting here skips the door code, so the app can't confirm anyone was at the room. */
 const DoorNote = () => (
-  <span className="mt-1.5 block text-xs text-muted">Not at the door? Starting here marks it as not checked in at the room.</span>
+  <p className="mt-4 border-t border-border pt-3 text-xs text-muted">Not at the door? Starting here marks it as not checked in at the room.</p>
 );
 
 export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
@@ -52,6 +52,8 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
   ]);
   const checklists = CAN.runChecklists.includes(user.role) ? await roomChecklists(id, today) : [];
   const live = board.find((r) => r.id === id)!;
+  // Current tenants and bookings show under Right now, so the history lists only finished stays.
+  const past = history.filter(({ a }) => a.actualCheckOut);
   const canManage = CAN.manageRooms.includes(user.role);
   const canSeePeople = CAN.manageOccupants.includes(user.role);
   const canPrintCode = CAN.printDoorCodes.includes(user.role);
@@ -87,105 +89,6 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <Card>
-            <SectionTitle>Right now</SectionTitle>
-            <dl className="grid gap-4 sm:grid-cols-2">
-              {canSeePeople && (
-                <Detail label="Beds free to give out">
-                  {live.assignableBeds > 0 ? `${live.assignableBeds} of ${room.capacity}` : `None (${live.occupants.length} of ${room.capacity} taken${live.upcoming.length ? ", the rest booked" : ""})`}
-                </Detail>
-              )}
-              <Detail label="Condition">{CONDITION_LABELS[room.condition]}</Detail>
-              {CAN.viewClients.includes(user.role) && <Detail label="Contract">
-                {live.contract ? (
-                  canSeePeople ? (
-                    <Link className="link" href={`/contracts/${live.contract.id}`}>
-                      {live.contract.clientName}, contract {live.contract.reference}
-                    </Link>
-                  ) : (
-                    live.contract.clientName
-                  )
-                ) : (
-                  "Not leased to anyone"
-                )}
-              </Detail>}
-              {CAN.viewClients.includes(user.role) && <Detail label="Contract ends">{live.contract ? formatDate(live.contract.endDate) : null}</Detail>}
-              {checklists.length > 0 && (
-                <Detail label="Maintenance checklists">
-                  <ul className="space-y-2">
-                    {checklists.map((c) => (
-                      <li key={c.checklist.id}>
-                        {c.checklist.name}
-                        <span className={`block text-xs ${c.daysLate > 0 ? "text-attention" : "text-muted"}`}>
-                          {c.due > today ? `Next due ${formatDate(c.due)}` : c.daysLate > 0 ? `${c.daysLate} days overdue` : "Due today"}
-                        </span>
-                        {c.due <= today && (
-                          <ActionForm
-                            action={async () => {
-                              "use server";
-                              return startRunHere(room.id, c.checklist.id);
-                            }}
-                            submitLabel="Start check"
-                            pendingLabel="Opening…"
-                            submitVariant="secondary"
-                            className="mt-1"
-                          />
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                  {checklists.some((c) => c.due <= today) && <DoorNote />}
-                </Detail>
-              )}
-              <Detail label="Cleaning">
-                {everyLabel(cleaning.every)}
-                <span className="block text-xs text-muted">
-                  {lastCleanedLabel(cleaning.lastCleaned, today)}
-                  {cleaning.next && `. Next ${cleaning.next === today ? "today" : formatDate(cleaning.next)}`}
-                </span>
-                {CAN.cleanRooms.includes(user.role) && (
-                  <ActionForm
-                    action={async () => {
-                      "use server";
-                      return startCleaningHere(room.id);
-                    }}
-                    submitLabel="Start cleaning"
-                    pendingLabel="Opening…"
-                    submitVariant="secondary"
-                    className="mt-2"
-                  />
-                )}
-                {CAN.cleanRooms.includes(user.role) && <DoorNote />}
-              </Detail>
-            </dl>
-            <div className="mt-4 space-y-2">
-              {live.occupants.length === 0 && <p className="text-sm text-muted">No one lives here right now.</p>}
-              {live.occupants.map((o) => (
-                <div key={o.assignmentId} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3 text-sm">
-                  <div>
-                    {canSeePeople ? (
-                      <Link className="font-medium link" href={`/occupants/${o.occupantId}`}>
-                        {o.fullName}
-                      </Link>
-                    ) : (
-                      <span className="font-medium">{o.fullName}</span>
-                    )}
-                    {o.slot && <span className="text-muted">, {o.slot}</span>}
-                    <p className="text-xs text-muted">
-                      Moved in {formatDate(o.checkIn)}
-                      {o.expectedCheckOut && `. Expected to move out ${formatDate(o.expectedCheckOut)}.`}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              {live.upcoming.map((o) => (
-                <p key={o.assignmentId} className="text-sm text-muted">
-                  {o.fullName} moves in {formatDate(o.checkIn)}
-                </p>
-              ))}
-            </div>
-          </Card>
-
           {requests.length > 0 && (
             <Card className="border-warn">
               <SectionTitle
@@ -213,11 +116,135 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
             </Card>
           )}
 
+          <Card>
+            <SectionTitle>Right now</SectionTitle>
+            <dl className="grid gap-4 sm:grid-cols-2">
+              {canSeePeople && (
+                <Detail label="Beds">
+                  {live.assignableBeds > 0
+                    ? `${live.assignableBeds} of ${room.capacity} free to give out`
+                    : `Full, ${live.occupants.length} of ${room.capacity} taken${live.upcoming.length ? ", the rest booked" : ""}`}
+                </Detail>
+              )}
+              {CAN.viewClients.includes(user.role) && <Detail label="Contract">
+                {live.contract ? (
+                  canSeePeople ? (
+                    <Link className="link" href={`/contracts/${live.contract.id}`}>
+                      {live.contract.clientName}, contract {live.contract.reference}
+                    </Link>
+                  ) : (
+                    live.contract.clientName
+                  )
+                ) : (
+                  "Not leased to anyone"
+                )}
+              </Detail>}
+              {CAN.viewClients.includes(user.role) && <Detail label="Contract ends">{live.contract ? formatDate(live.contract.endDate) : null}</Detail>}
+            </dl>
+            <div className="mt-4 space-y-2">
+              {live.occupants.length === 0 && <p className="text-sm text-muted">No one lives here right now.</p>}
+              {live.occupants.map((o) => (
+                <div key={o.assignmentId} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3 text-sm">
+                  <div>
+                    {canSeePeople ? (
+                      <Link className="font-medium link" href={`/occupants/${o.occupantId}`}>
+                        {o.fullName}
+                      </Link>
+                    ) : (
+                      <span className="font-medium">{o.fullName}</span>
+                    )}
+                    {o.slot && <span className="text-muted">, {o.slot}</span>}
+                    <p className="text-xs text-muted">
+                      Moved in {formatDate(o.checkIn)}
+                      {o.expectedCheckOut && `. Expected to move out ${formatDate(o.expectedCheckOut)}.`}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {live.upcoming.map((o) => (
+                <p key={o.assignmentId} className="text-sm text-muted">
+                  {o.fullName} moves in {formatDate(o.checkIn)}
+                </p>
+              ))}
+            </div>
+            <ActionForm
+              action={setRoomCondition.bind(null, room.id)}
+              submitLabel="Update"
+              submitVariant="secondary"
+              className="mt-5 flex flex-wrap items-end gap-3 border-t border-border pt-4"
+            >
+              <Field label="Condition" className="min-w-48 flex-1">
+                <Select name="condition" defaultValue={room.condition}>
+                  {Object.entries(CONDITION_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </ActionForm>
+            <p className="mt-2 text-xs text-muted">Shows on the room board. Use Needs attention for repairs or cleaning.</p>
+          </Card>
+
+          {(checklists.length > 0 || CAN.cleanRooms.includes(user.role)) && (
+            <Card>
+              <SectionTitle>Checks and cleaning</SectionTitle>
+              <dl className="grid gap-4 sm:grid-cols-2">
+                {checklists.length > 0 && (
+                  <Detail label="Maintenance checklists">
+                    <ul className="space-y-2">
+                      {checklists.map((c) => (
+                        <li key={c.checklist.id}>
+                          {c.checklist.name}
+                          <span className={`block text-xs ${c.daysLate > 0 ? "text-attention" : "text-muted"}`}>
+                            {c.due > today ? `Next due ${formatDate(c.due)}` : c.daysLate > 0 ? `${c.daysLate} days overdue` : "Due today"}
+                          </span>
+                          {c.due <= today && (
+                            <ActionForm
+                              action={async () => {
+                                "use server";
+                                return startRunHere(room.id, c.checklist.id);
+                              }}
+                              submitLabel="Start check"
+                              pendingLabel="Opening…"
+                              submitVariant="secondary"
+                              className="mt-1"
+                            />
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </Detail>
+                )}
+                <Detail label="Cleaning">
+                  {everyLabel(cleaning.every)}
+                  <span className="block text-xs text-muted">
+                    {lastCleanedLabel(cleaning.lastCleaned, today)}
+                    {cleaning.next && `. Next ${cleaning.next === today ? "today" : formatDate(cleaning.next)}`}
+                  </span>
+                  {CAN.cleanRooms.includes(user.role) && (
+                    <ActionForm
+                      action={async () => {
+                        "use server";
+                        return startCleaningHere(room.id);
+                      }}
+                      submitLabel="Start cleaning"
+                      pendingLabel="Opening…"
+                      submitVariant="secondary"
+                      className="mt-2"
+                    />
+                  )}
+                </Detail>
+              </dl>
+              {(checklists.some((c) => c.due <= today) || CAN.cleanRooms.includes(user.role)) && <DoorNote />}
+            </Card>
+          )}
+
           {canSeePeople && (
             <div>
-              <SectionTitle>Everyone who has stayed here</SectionTitle>
-              {history.length === 0 ? (
-                <Empty>No one has stayed in this room yet.</Empty>
+              <SectionTitle>Past tenants</SectionTitle>
+              {past.length === 0 ? (
+                <Empty>{history.length === 0 ? "No one has stayed in this room yet." : "No one has moved out of this room yet."}</Empty>
               ) : (
                 <Table>
                   <thead>
@@ -228,7 +255,7 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
                     </tr>
                   </thead>
                   <tbody>
-                    {history.map(({ a, name }) => (
+                    {past.map(({ a, name }) => (
                       <tr key={a.id}>
                         <Td primary>
                           <Link className="link" href={`/occupants/${a.occupantId}`}>
@@ -249,41 +276,6 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
         </div>
 
         <div className="space-y-6">
-          <Card>
-            <SectionTitle>People allowed</SectionTitle>
-            <p className="mb-3 text-sm">
-              <span className="plate text-3xl font-bold">{room.capacity}</span>{" "}
-              <span className="text-muted">
-                {room.capacity === 1 ? "person" : "people"} can live here. {live.occupants.length} living here now
-                {live.upcoming.length > 0 && `, ${live.upcoming.length} moving in soon`}.
-              </span>
-            </p>
-            {canManage ? (
-              <ActionForm action={setPeopleAllowed.bind(null, room.id)} submitLabel="Save" className="flex flex-wrap items-end gap-3">
-                <Field label="Change to" hint="One bed per person">
-                  <Input name="capacity" type="number" min={1} max={20} defaultValue={room.capacity} required className="w-24" />
-                </Field>
-              </ActionForm>
-            ) : (
-              <p className="text-xs text-muted">Only the admin can change this.</p>
-            )}
-          </Card>
-
-          <Card>
-            <SectionTitle>Condition</SectionTitle>
-            <ActionForm action={setRoomCondition.bind(null, room.id)} submitLabel="Update">
-              <Field label="Room condition" hint="Shows on the room board. Use Needs attention for repairs or cleaning.">
-                <Select name="condition" defaultValue={room.condition}>
-                  {Object.entries(CONDITION_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </ActionForm>
-          </Card>
-
           {doorCode && (
             <Card>
               <SectionTitle
@@ -319,25 +311,33 @@ export default async function RoomPage({ params }: PageProps<"/rooms/[id]">) {
 
           {canManage && (
             <Card>
-              <SectionTitle>Room details</SectionTitle>
-              <ActionForm action={updateRoom.bind(null, room.id)}>
-                <RoomFields roomTypes={roomTypes} room={room} />
-              </ActionForm>
-            </Card>
-          )}
-
-          {canManage && history.length === 0 && (
-            <Card>
-              <SectionTitle>Delete room</SectionTitle>
-              <ActionForm
-                action={async () => {
-                  "use server";
-                  return deleteRoom(room.id);
-                }}
-                submitLabel="Delete room"
-                submitVariant="danger"
-                confirm={`Delete room ${room.number}? This can't be undone.`}
-              />
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                  <span>
+                    <span className="block text-base font-semibold tracking-tight">Edit room</span>
+                    <span className="block text-xs text-muted">Number, floor, type, people allowed and notes</span>
+                  </span>
+                  <span className="text-sm font-medium text-muted group-open:hidden">Show</span>
+                  <span className="hidden text-sm font-medium text-muted group-open:inline">Hide</span>
+                </summary>
+                <ActionForm action={updateRoom.bind(null, room.id)} className="mt-4">
+                  <RoomFields roomTypes={roomTypes} room={room} />
+                </ActionForm>
+                {history.length === 0 && (
+                  <div className="mt-5 border-t border-border pt-4">
+                    <ActionForm
+                      action={async () => {
+                        "use server";
+                        return deleteRoom(room.id);
+                      }}
+                      submitLabel="Delete room"
+                      submitVariant="danger"
+                      confirm={`Delete room ${room.number}? This can't be undone.`}
+                    />
+                    <p className="mt-2 text-xs text-muted">Only rooms no one has stayed in can be deleted.</p>
+                  </div>
+                )}
+              </details>
             </Card>
           )}
         </div>

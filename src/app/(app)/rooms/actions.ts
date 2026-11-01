@@ -106,23 +106,6 @@ export async function updateRoom(id: string, _: ActionState, fd: FormData): Prom
   });
 }
 
-/** Sets how many people may live in one room. */
-export async function setPeopleAllowed(id: string, _: ActionState, fd: FormData): Promise<ActionState> {
-  return mutate(async () => {
-    const user = await requireStaff(CAN.manageRooms);
-    const allowed = readAllowed(fd);
-    if ("error" in allowed) return { error: allowed.error };
-    if (!(await roomInReach(user, id))) return { error: "Room not found." };
-    const tooFew = await checkPeopleFit([id], allowed.value);
-    if (tooFew) return { error: tooFew };
-    const db = await getDb();
-    await db.update(schema.rooms).set({ capacity: allowed.value }).where(eq(schema.rooms.id, id));
-    await audit(user.id, "set_capacity", "room", id, { capacity: allowed.value });
-    refreshRooms([id]);
-    return { ok: `Now ${allowed.value} ${allowed.value === 1 ? "person" : "people"} allowed.` };
-  });
-}
-
 /**
  * Sets people allowed for many rooms at once. `which` is "all", "floor:3",
  * "type:<room type id>" or "room:<room id>".
