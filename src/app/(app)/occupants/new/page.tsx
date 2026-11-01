@@ -22,12 +22,13 @@ export default async function NewOccupantPage({ searchParams }: PageProps<"/occu
       <PageHeader back={{ href: "/occupants", label: "Tenants" }} title="Add tenant" />
       <ActionForm action={createOccupant} submitLabel="Save tenant" className="max-w-3xl space-y-6">
         <Card>
-          <SectionTitle>Room assignment</SectionTitle>
-          <StayFields rooms={rooms} defaultRoomId={typeof room === "string" ? room : undefined} optional />
+          <SectionTitle>Personal details</SectionTitle>
+          <p className="-mt-2 mb-4 text-sm text-muted">Only the name is required. Add the rest now or later.</p>
+          <OccupantFields clients={clients} defaultClientId={typeof client === "string" ? client : undefined} />
         </Card>
         <Card>
-          <SectionTitle>Personal details</SectionTitle>
-          <OccupantFields clients={clients} defaultClientId={typeof client === "string" ? client : undefined} />
+          <SectionTitle>Room assignment</SectionTitle>
+          <StayFields rooms={rooms} defaultRoomId={typeof room === "string" ? room : undefined} optional />
         </Card>
       </ActionForm>
     </>
