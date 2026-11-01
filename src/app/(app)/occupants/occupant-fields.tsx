@@ -113,21 +113,34 @@ export function StayFields({
           ))}
         </Select>
       </Field>
-      <Field label="Bed" hint="Optional, e.g. Bed A, Upper bunk">
-        <Input name="slot" />
-      </Field>
       <Field label="Move-in date">
         <Input name="checkIn" type="date" defaultValue={todayISO()} />
       </Field>
       <Field label="Expected move-out date" hint="Optional">
         <Input name="expectedCheckOut" type="date" />
       </Field>
-      <Field label="Keys and cards issued" hint="Optional, e.g. 1 room key, 1 key card #0412">
-        <Input name="keysIssued" />
-      </Field>
-      <Field label="Notes about this stay" hint="Optional">
-        <Input name="assignmentNotes" />
-      </Field>
+      {/* Bed, keys and notes are optional extras; folded so a quick stay is three fields on a phone. */}
+      <details className="group rounded-xl border border-border sm:col-span-2">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-3 hover:bg-subtle [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="block text-sm font-semibold">Bed, keys and notes</span>
+            <span className="block text-xs text-muted">Optional</span>
+          </span>
+          <span className="text-sm font-medium text-muted group-open:hidden">Show</span>
+          <span className="hidden text-sm font-medium text-muted group-open:inline">Hide</span>
+        </summary>
+        <div className="grid gap-4 border-t border-border p-4 sm:grid-cols-2">
+          <Field label="Bed" hint="e.g. Bed A, Upper bunk">
+            <Input name="slot" />
+          </Field>
+          <Field label="Keys and cards issued" hint="e.g. 1 room key, 1 key card #0412">
+            <Input name="keysIssued" />
+          </Field>
+          <Field label="Notes about this stay" className="sm:col-span-2">
+            <Input name="assignmentNotes" />
+          </Field>
+        </div>
+      </details>
     </div>
   );
 }

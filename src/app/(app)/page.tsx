@@ -115,7 +115,45 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
       .filter((o) => o.expectedCheckOut && daysBetween(today, o.expectedCheckOut) <= 7)
       .map((o) => ({ ...o, room: r.number })),
   );
-  const hasNotices = uncovered.length > 0 || waiting > 0 || endingContracts.length > 0 || checkOutsSoon.length > 0;
+  // Notices on top of the board, most pressing first. The dot colour says how pressing.
+  const notice = (dot: string) =>
+    `relative py-3 pl-9 pr-4 before:absolute before:left-4 before:top-[1.15rem] before:size-2 before:rounded-full ${dot} sm:py-2.5 sm:before:top-[0.95rem]`;
+  const notices = [
+    waiting > 0 && (
+      <li key="waiting" className={notice("before:bg-brand")}>
+        <Link className="font-medium link" href="/requests?view=pending">
+          {waiting} {waiting === 1 ? "request needs" : "requests need"} a reply
+        </Link>{" "}
+        waiting to be handled.
+      </li>
+    ),
+    ...endingContracts.map((c) => (
+      <li key={c.id} className={notice("before:bg-warn")}>
+        Contract{" "}
+        <Link className="font-medium link" href={`/contracts/${c.id}`}>
+          {c.reference}
+        </Link>{" "}
+        for {c.clientName} {c.endDate < today ? "expired" : "ends"} {formatDate(c.endDate)}.{" "}
+        {c.endDate < today ? "Resolve continuing stays or renew coverage." : `${daysBetween(today, c.endDate)} days left.`}
+      </li>
+    )),
+    ...uncovered.map((r) => (
+      <li key={r.id} className={notice("before:bg-attention")}>
+        <Link className="link" href={`/rooms/${r.id}`}>
+          Room {r.number}
+        </Link>{" "}
+        has tenants but no active contract covers it. Add the room to a contract.
+      </li>
+    )),
+    ...checkOutsSoon.map((o) => (
+      <li key={o.assignmentId} className={notice("before:bg-muted/50")}>
+        <Link className="font-medium link" href={`/occupants/${o.occupantId}`}>
+          {o.fullName}
+        </Link>{" "}
+        in room {o.room} is expected to move out on {formatDate(o.expectedCheckOut)}.
+      </li>
+    )),
+  ].filter(Boolean);
 
   return (
     <>
@@ -135,37 +173,20 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
         }
       />
 
-      {hasNotices && (
-        <ul className="mb-6 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface text-sm shadow-card">
-          {waiting > 0 && (
-            <li className="relative py-3 pl-9 pr-4 before:absolute before:left-4 before:top-[1.15rem] before:size-2 before:rounded-full before:bg-brand sm:py-2.5 sm:before:top-[0.95rem]">
-              <Link className="font-medium link" href="/requests?view=pending">
-                {waiting} {waiting === 1 ? "request needs" : "requests need"} a reply
-              </Link>{" "}
-              waiting to be handled.
-            </li>
+      {notices.length > 0 && (
+        <div className="mb-6 overflow-hidden rounded-xl border border-border bg-surface text-sm shadow-card">
+          <ul className="divide-y divide-border">{notices.slice(0, 2)}</ul>
+          {/* On a phone the board should start near the top, so only the first two notices show until asked. */}
+          {notices.length > 2 && (
+            <details className="group border-t border-border">
+              <summary className="cursor-pointer list-none px-4 py-3 font-medium text-muted hover:bg-subtle hover:text-foreground sm:py-2.5 [&::-webkit-details-marker]:hidden">
+                <span className="group-open:hidden">Show {notices.length - 2} more</span>
+                <span className="hidden group-open:inline">Show fewer</span>
+              </summary>
+              <ul className="divide-y divide-border border-t border-border">{notices.slice(2)}</ul>
+            </details>
           )}
-          {endingContracts.map((c) => (
-            <li key={c.id} className="relative py-3 pl-9 pr-4 before:absolute before:left-4 before:top-[1.15rem] before:size-2 before:rounded-full before:bg-warn sm:py-2.5 sm:before:top-[0.95rem]">
-              Contract{" "}
-              <Link className="font-medium link" href={`/contracts/${c.id}`}>
-                {c.reference}
-              </Link>{" "}
-              for {c.clientName} {c.endDate < today ? "expired" : "ends"} {formatDate(c.endDate)}. {c.endDate < today ? "Resolve continuing stays or renew coverage." : `${daysBetween(today, c.endDate)} days left.`}
-            </li>
-          ))}
-          {uncovered.map(r => <li key={r.id} className="relative py-3 pl-9 pr-4 before:absolute before:left-4 before:top-[1.15rem] before:size-2 before:rounded-full before:bg-attention sm:py-2.5 sm:before:top-[0.95rem]">
-            <Link className="link" href={`/rooms/${r.id}`}>Room {r.number}</Link> has tenants but no active contract covers it. Add the room to a contract.
-          </li>)}
-          {checkOutsSoon.map((o) => (
-            <li key={o.assignmentId} className="relative py-3 pl-9 pr-4 before:absolute before:left-4 before:top-[1.15rem] before:size-2 before:rounded-full before:bg-muted/50 sm:py-2.5 sm:before:top-[0.95rem]">
-              <Link className="font-medium link" href={`/occupants/${o.occupantId}`}>
-                {o.fullName}
-              </Link>{" "}
-              in room {o.room} is expected to move out on {formatDate(o.expectedCheckOut)}.
-            </li>
-          ))}
-        </ul>
+        </div>
       )}
 
       {/* Phones: one row that scrolls sideways, so the board starts higher up. */}

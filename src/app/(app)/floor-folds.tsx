@@ -65,10 +65,10 @@ export function FloorFolds({ floors }: { floors: FloorFold[] }) {
       <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface shadow-card">
         {floors.map((f) => (
           <details key={f.id} open={open.has(f.id)} onToggle={(e) => setOpen(f.id, e.currentTarget.open)} className="group">
-            <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-3.5 transition-colors hover:bg-subtle sm:px-5 [&::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none items-start gap-3 px-3 py-3.5 sm:items-center transition-colors hover:bg-subtle sm:px-5 [&::-webkit-details-marker]:hidden">
               <svg
                 viewBox="0 0 24 24"
-                className="size-5 shrink-0 text-muted transition-transform group-open:rotate-90"
+                className="mt-1 size-5 shrink-0 text-muted transition-transform group-open:rotate-90 sm:mt-0"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth={2}
