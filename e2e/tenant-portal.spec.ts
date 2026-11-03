@@ -85,7 +85,7 @@ test("tenant portal", async ({ browser }) => {
   });
 
   await test.step("admin changes how many people each room allows", async () => {
-    await admin.goto("/rooms");
+    await admin.goto("/rooms/setup");
     const form = admin.locator("form", { has: admin.getByRole("button", { name: "Change" }) });
     await form.getByLabel(/^Which rooms/).selectOption("all");
     await form.getByLabel(/^People allowed/).fill("2");

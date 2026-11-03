@@ -160,13 +160,24 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
       <PageHeader
         title="Room board"
         subtitle={
-          canSeePeople
-            ? `${hotel.name}, ${formatDate(today)}. ${people} tenants in ${beds} beds; ${assignable} free to give out${booked ? `, ${booked} booked for move-ins` : ""}.`
-            : `${hotel.name}, ${formatDate(today)}. ${all.length} rooms.`
+          <>
+            {canSeePeople
+              ? `${hotel.name}, ${formatDate(today)}. ${people} tenants in ${beds} beds; ${assignable} free to give out${booked ? `, ${booked} booked for move-ins` : ""}.`
+              : `${hotel.name}, ${formatDate(today)}. ${all.length} rooms.`}
+            {/* On phones a full-width button here pushes the board down; a link says the same. */}
+            {canSeeContracts && (
+              <>
+                {" "}
+                <Link href="/availability" className="font-medium text-foreground link sm:hidden">
+                  When rooms free up
+                </Link>
+              </>
+            )}
+          </>
         }
         actions={
           canSeeContracts && (
-            <LinkButton variant="secondary" href="/availability">
+            <LinkButton variant="secondary" href="/availability" className="max-sm:hidden">
               When rooms free up
             </LinkButton>
           )
@@ -231,7 +242,7 @@ export default async function RoomBoardPage({ searchParams }: PageProps<"/">) {
             // Folded, a floor shows how full it is and names the rooms that need someone, urgent first.
             summary: (
               <>
-                <span className="plate w-16 shrink-0 text-lg font-bold">Floor {f}</span>
+                <span className="plate w-full shrink-0 text-lg font-bold sm:w-16">Floor {f}</span>
                 <span className="flex items-center gap-3">
                   <span className="h-1.5 w-20 overflow-hidden rounded-full bg-foreground/10 sm:w-28" aria-hidden>
                     <span className="block h-full rounded-full bg-occupied ring-1 ring-inset ring-foreground/10" style={{ width: `${(lived / rooms.length) * 100}%` }} />

@@ -50,6 +50,7 @@ function readAllowed(fd: FormData) {
 function refreshRooms(roomIds: string[] = []) {
   revalidatePath("/");
   revalidatePath("/rooms");
+  revalidatePath("/rooms/setup");
   revalidatePath("/assignments");
   for (const id of roomIds) revalidatePath(`/rooms/${id}`);
 }
@@ -81,6 +82,7 @@ export async function createRoom(_: ActionState, fd: FormData): Promise<ActionSt
       .returning();
     await audit(user.id, "create", "room", room.id, { number: room.number });
     revalidatePath("/rooms");
+    revalidatePath("/rooms/setup");
     return { ok: `Room ${room.number} added.` };
   });
 }

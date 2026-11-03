@@ -42,7 +42,7 @@ test("phone: staff pages fit the screen and the tab bar reaches them", async ({ 
   const page = await signIn(browser, ADMIN);
   const pages = await allNavPages(page);
   expect(pages).toEqual(expect.arrayContaining(["/", "/requests", "/occupants", "/contracts", "/staff"]));
-  for (const path of [...pages, "/account", "/occupants/new", "/contracts/new"]) await expectFitsScreen(page, path);
+  for (const path of [...pages, "/account", "/occupants/new", "/contracts/new", "/rooms/setup"]) await expectFitsScreen(page, path);
 
   // Availability puts the rooms first: the first room shows without scrolling.
   await page.goto("/availability");
