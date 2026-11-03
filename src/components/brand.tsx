@@ -1,13 +1,11 @@
 import { BRAND } from "@/lib/brand";
 
-/** Vendrato's mark: three squares stepping up, with a fainter fourth under the top one. */
+/** Vendrato's mark (from vendrato.com): a V with an orange triangle. The V takes the text colour, so it works on light and dark. */
 export function BrandMark({ className = "" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 34 34" className={`shrink-0 fill-brand ${className}`} aria-hidden>
-      <rect x="0" y="24" width="10" height="10" />
-      <rect x="12" y="12" width="10" height="10" />
-      <rect x="24" y="0" width="10" height="10" />
-      <rect x="24" y="12" width="10" height="10" opacity=".35" />
+    <svg viewBox="0 0 256 218" className={`shrink-0 ${className}`} aria-hidden>
+      <path fill="currentColor" d="M0 0h91l51.7 88-15.1 26-51.9-88.5h-30l83.2 141.5L227 0h29L128 218z" />
+      <path fill={BRAND.logoOrange} d="M117 0h77l-38.5 65.6z" />
     </svg>
   );
 }
@@ -16,7 +14,7 @@ export function BrandMark({ className = "" }: { className?: string }) {
 export function Brand({ className = "" }: { className?: string }) {
   return (
     <span className={`inline-flex items-center gap-[0.5em] ${className}`}>
-      <BrandMark className="size-[1.05em]" />
+      <BrandMark className="h-[1.05em] w-auto" />
       <span className="font-heading font-bold leading-none tracking-[-0.045em]">{BRAND.wordmark}</span>
     </span>
   );

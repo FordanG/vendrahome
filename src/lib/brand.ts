@@ -8,4 +8,6 @@ export const BRAND = {
   ink: "#0b0b0b",
   paper: "#f5f4f0",
   orange: "#ff5a00",
+  /** The orange inside the Vendrato logo itself. */
+  logoOrange: "#f05023",
 };
